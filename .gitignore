@@ -1,0 +1,30 @@
+# Environment / secrets
+.env
+*.local
+
+# Personal planning / assistant working files — never published to the
+# public repo. The app's actual behavior is documented in README.md; these
+# are working notes for developing it, not part of the release.
+prompt.md
+deploy-plan.md
+CLAUDE.md
+questions.md
+.claude/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.venv*/
+venv/
+.pytest_cache/
+
+# Node (if any future frontend tooling)
+node_modules/
+
+# Logs & OS cruft
+*.log
+.DS_Store
+backups/
+!backups/.gitkeep

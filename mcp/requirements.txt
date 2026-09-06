@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+requests
+# Pin to mcp 1.x: FastMCP (the documented API this server uses) is stable there;
+# mcp 2.x renamed it to MCPServer and is not yet used by most MCP clients.
+mcp>=1.20.0,<2.0.0
+httpx

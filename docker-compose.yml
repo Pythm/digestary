@@ -1,0 +1,107 @@
+# ─────────────────────────────────────────────────────────────
+# Digestary docker-compose — runs on a home server / Proxmox LXC
+# Usage:  cp .env.example .env    # then edit .env
+#         docker compose up -d --build
+#         open http://<server-ip>:8080
+#
+# The stack has THREE services:
+#   couchdb  -> the document database (the data)
+#   app      -> FastAPI backend + the static UI (what you open in a browser)
+#   mcp      -> always-on MCP server (reads everything, writes only to
+#                `findings`). The LLM that talks to it is OPTIONAL.
+# ─────────────────────────────────────────────────────────────
+
+services:
+   # ── CouchDB: the open-source, document-store database ──
+  couchdb:
+    image: apache/couchdb:3.4.2
+    restart: unless-stopped
+    environment:
+      COUCHDB_USER: ${COUCHDB_USER:-admin}
+      COUCHDB_PASSWORD: ${COUCHDB_PASSWORD:-please_change_me}
+       # Admin port is bound to localhost *inside* the container only;
+       # it is NOT exposed to the host.
+    volumes:
+       # Persisted data — this is the one folder to back up.
+      - digestary-data:/opt/couchdb/data
+    ports:
+       # 3080 (host) : 5984 (container). 5984 is CouchDB's public port.
+       # Exposing CouchDB directly is optional; the app talks to it
+       # over the internal docker network. 3080 here is for direct access
+       # / backups from the host.
+       - "${COUCHDB_HOST_PORT:-3080}:5984"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5984/_up"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+   # ── App: FastAPI backend + the static UI (dark by default; light is
+   #    a free, first-class option — color is a design choice) ──
+  app:
+    build:
+      context: ./app
+    restart: unless-stopped
+    depends_on:
+      couchdb:
+        condition: service_healthy
+    environment:
+      COUCHDB_URL: http://couchdb:5984
+      COUCHDB_USER: ${COUCHDB_USER:-admin}
+      COUCHDB_PASSWORD: ${COUCHDB_PASSWORD:-please_change_me}
+      MCP_SECRET: ${MCP_SECRET:-change-this-mcp-secret}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      # ── auth mode: "local" (no login, everyone is the owner) or "public"
+      # (real username/password login; a GUEST_TOKEN still allows add-only
+      # access with no account, for a one-off shared device) ──
+      AUTH_MODE: ${AUTH_MODE:-local}
+      # first-boot bootstrap of the one owner account (public mode only) —
+      # only used if the `users` database is still empty
+      OWNER_USERNAME: ${OWNER_USERNAME:-}
+      OWNER_PASSWORD: ${OWNER_PASSWORD:-}
+      # signs the login session cookie — required in public mode; generate
+      # with `openssl rand -hex 32`
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      GUEST_TOKEN: ${GUEST_TOKEN:-}
+      FEVER_THRESHOLD: ${FEVER_THRESHOLD:-37.8}
+      # the language an LLM should use if asked to prefill items/symptoms/
+      # bathroom kinds or fill in emoji — informational only, see README
+      LANGUAGE: ${LANGUAGE:-en}
+    ports:
+       # 8080 (host) : 8000 (container). This is the URL you open.
+       - "${APP_HOST_PORT:-8080}:8000"
+     # For local development you can instead bind-mount the source:
+     # volumes:
+     #    - ./app:/app
+
+   # ── MCP server: ALWAYS ON. Reads everything, writes only to `findings`.
+   #    An external LLM (Hermes, Claude Code, a local model, …) talks to it to
+   #    query/ask questions; the LLM is NOT part of this stack.
+   #    By default this serves MCP over HTTP so an agent running outside
+   #    the stack (or the docker network) can reach it. Agents that launch
+   #    it as a stdio subprocess (Hermes, Claude Code) can also run
+   #     `python mcp/mcp_server.py` directly. ──
+  mcp:
+    build:
+      context: ./mcp
+    restart: unless-stopped
+    depends_on:
+      - couchdb
+      - app
+    environment:
+      COUCHDB_URL: http://couchdb:5984
+      COUCHDB_USER: ${COUCHDB_USER:-admin}
+      COUCHDB_PASSWORD: ${COUCHDB_PASSWORD:-please_change_me}
+      MCP_SECRET: ${MCP_SECRET:-change-this-mcp-secret}
+      MCP_TRANSPORT: ${MCP_TRANSPORT:-http}
+      MCP_PORT: "8000"
+      FEVER_THRESHOLD: ${FEVER_THRESHOLD:-37.8}
+      LANGUAGE: ${LANGUAGE:-en}
+    ports:
+       # Expose the HTTP MCP endpoint so external agents can reach it.
+       # (Agents using stdio don't need this port — they exec the script.)
+       - "${MCP_HOST_PORT:-8090}:8000"
+
+volumes:
+   # Named volume — the single data folder to back up.
+  digestary-data:
