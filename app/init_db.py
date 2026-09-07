@@ -23,7 +23,7 @@ COUCHDB_USER = os.environ.get("COUCHDB_USER", "admin")
 COUCHDB_PASSWORD = os.environ.get("COUCHDB_PASSWORD", "")
 
 DBS = ["items", "item_links", "intake", "holidays", "symptom_items", "health",
-       "bathroom_items", "bathroom_events", "notes", "findings", "users"]
+       "bathroom_items", "bathroom_events", "notes", "findings", "users", "passkeys"]
 
 # db -> event-time field to index (only tables with a range-queried time)
 EVENT_TIME_FIELDS = {
@@ -76,6 +76,7 @@ def main() -> int:
 
     for db, field in EVENT_TIME_FIELDS.items():
         couch.create_index(db, [field], name=f"{field}-index")
+    couch.create_index("passkeys", ["username"], name="username-index")
     print("Ensured event-time indexes.")
 
     bootstrap_owner(couch)

@@ -98,15 +98,13 @@ function updateRoleBadge() {
     return;
   }
   badge.classList.remove("hidden");
-  badge.textContent = state.principal.role === "owner" ? `👑 ${state.principal.username}` : "👤 guest";
-  badge.className = "badge " + state.principal.role;
+  badge.textContent = `👑 ${state.principal.username}`;
+  badge.className = "badge owner";
   $("#logout-btn").classList.remove("hidden");
 }
 
 async function tryAuthAndEnter() {
   state.config = await api("/api/config");
-  $("#guest-section").hidden = !state.config.guest_enabled;
-
   if (state.config.auth_mode !== "public") {
     state.principal = { username: "owner", role: "owner" };
     showApp();
@@ -114,14 +112,12 @@ async function tryAuthAndEnter() {
     await bootApp();
     return;
   }
-  try { window.__guestToken = sessionStorage.getItem("digestary_guest_token") || null; } catch (_) {}
   try {
-    state.principal = await api("/api/auth/me", window.__guestToken ? { headers: { "X-Auth-Token": window.__guestToken } } : {});
+    state.principal = await api("/api/auth/me");
     showApp();
     updateRoleBadge();
     await bootApp();
   } catch (_) {
-    window.__guestToken = null;
     showLoginGate();
   }
 }
@@ -129,43 +125,122 @@ async function tryAuthAndEnter() {
 $("#login-submit").addEventListener("click", async () => {
   $("#login-error").textContent = "";
   try {
-    state.principal = await apiJson("/api/auth/login", "POST", {
+    const res = await apiJson("/api/auth/login", "POST", {
       username: $("#login-username").value, password: $("#login-password").value,
     });
+    state.principal = res.mfa_required ? await completePasskeyLogin(res) : res;
     showApp();
     updateRoleBadge();
     await bootApp();
   } catch (e) {
-    $("#login-error").textContent = "Invalid username/password, or too many attempts.";
-  }
-});
-$("#guest-submit").addEventListener("click", async () => {
-  window.__guestToken = $("#guest-token-input").value.trim();
-  try {
-    state.principal = await api("/api/auth/me", { headers: { "X-Auth-Token": window.__guestToken } });
-    try { sessionStorage.setItem("digestary_guest_token", window.__guestToken); } catch (_) {}
-    showApp();
-    updateRoleBadge();
-    await bootApp();
-  } catch (e) {
-    $("#login-error").textContent = "Invalid guest code.";
+    $("#login-error").textContent = e.passkeyStep
+      ? "Passkey verification failed or was cancelled."
+      : "Invalid username/password, or too many attempts.";
   }
 });
 $("#logout-btn").addEventListener("click", async () => {
   await api("/api/auth/logout", { method: "POST" });
-  window.__guestToken = null;
   location.reload();
 });
 
-// every authenticated fetch after a guest login needs the header attached;
-// simplest correct approach: wrap `api()` to inject it when set.
-const _apiOriginal = api;
-async function apiWithGuest(path, opts = {}) {
-  if (window.__guestToken) {
-    opts.headers = { ...(opts.headers || {}), "X-Auth-Token": window.__guestToken };
+// ── passkey login step (2nd factor, only asked of accounts that enrolled
+// one — see #security-section) ─────────────────────────────────────────
+async function completePasskeyLogin(mfa) {
+  $("#login-sub").textContent = "Confirm with your passkey…";
+  try {
+    if (!window.PublicKeyCredential) throw new Error("This browser doesn't support passkeys.");
+    const assertion = await navigator.credentials.get({ publicKey: decodeRequestOptions(mfa.options) });
+    return await apiJson("/api/auth/passkeys/login/verify", "POST", {
+      ticket: mfa.ticket, credential: credentialToJson(assertion),
+    });
+  } catch (e) {
+    e.passkeyStep = true;
+    throw e;
+  } finally {
+    $("#login-sub").textContent = "Sign in to your journal.";
   }
-  return _apiOriginal(path, opts);
 }
+
+// ── WebAuthn (passkeys) — base64url <-> ArrayBuffer plumbing the browser's
+// PublicKeyCredential API needs; the server only ever speaks base64url JSON
+// (see webauthn.helpers.options_to_json / parse_*_credential_json server-side).
+function b64urlToBuf(s) {
+  const bin = atob((s + "=".repeat((4 - (s.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/"));
+  const buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return buf.buffer;
+}
+function bufToB64url(buf) {
+  let bin = "";
+  for (const b of new Uint8Array(buf)) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function decodeCreationOptions(opts) {
+  return {
+    ...opts,
+    challenge: b64urlToBuf(opts.challenge),
+    user: { ...opts.user, id: b64urlToBuf(opts.user.id) },
+    excludeCredentials: (opts.excludeCredentials || []).map((c) => ({ ...c, id: b64urlToBuf(c.id) })),
+  };
+}
+function decodeRequestOptions(opts) {
+  return {
+    ...opts,
+    challenge: b64urlToBuf(opts.challenge),
+    allowCredentials: (opts.allowCredentials || []).map((c) => ({ ...c, id: b64urlToBuf(c.id) })),
+  };
+}
+function credentialToJson(cred) {
+  const isRegistration = !!cred.response.attestationObject;
+  const response = isRegistration ? {
+    clientDataJSON: bufToB64url(cred.response.clientDataJSON),
+    attestationObject: bufToB64url(cred.response.attestationObject),
+  } : {
+    clientDataJSON: bufToB64url(cred.response.clientDataJSON),
+    authenticatorData: bufToB64url(cred.response.authenticatorData),
+    signature: bufToB64url(cred.response.signature),
+    userHandle: cred.response.userHandle ? bufToB64url(cred.response.userHandle) : null,
+  };
+  return { id: cred.id, rawId: bufToB64url(cred.rawId), type: cred.type, response };
+}
+
+// ── security — passkey enrollment/management (owner, public mode only) ───
+async function loadSecuritySection() {
+  const show = state.principal.role === "owner" && state.config.auth_mode === "public" && state.config.passkeys_enabled;
+  $("#security-section").classList.toggle("hidden", !show);
+  if (!show) return;
+  const rows = await api("/api/auth/passkeys");
+  const ul = $("#passkey-list");
+  ul.innerHTML = "";
+  for (const pk of rows) {
+    const li = document.createElement("li");
+    li.innerHTML = `<div>${escapeHtml(pk.nickname || "Passkey")}<div class="meta">added ${fmtTime(pk.created_at)}</div></div>`;
+    const del = document.createElement("button");
+    del.className = "small ghost"; del.textContent = "🗑";
+    del.addEventListener("click", async () => {
+      if (!confirm("Remove this passkey?")) return;
+      await api(`/api/auth/passkeys/${pk._id}`, { method: "DELETE" });
+      await loadSecuritySection();
+    });
+    li.appendChild(del);
+    ul.appendChild(li);
+  }
+}
+$("#add-passkey-btn").addEventListener("click", async () => {
+  try {
+    if (!window.PublicKeyCredential) throw new Error("This browser doesn't support passkeys.");
+    const options = await api("/api/auth/passkeys/register/begin", { method: "POST" });
+    const cred = await navigator.credentials.create({ publicKey: decodeCreationOptions(options) });
+    const nickname = prompt('Name this passkey (e.g. "iPhone")', "") || "Passkey";
+    await apiJson("/api/auth/passkeys/register/complete", "POST", {
+      nickname, credential: credentialToJson(cred),
+    });
+    toast("Passkey added");
+    await loadSecuritySection();
+  } catch (e) {
+    toast("Could not add passkey: " + e.message, "error");
+  }
+});
 
 // ── theme ────────────────────────────────────────────────────────────────
 function applyStoredTheme() {
@@ -215,8 +290,8 @@ function renderChips(listEl, items, { onTap, query, onAddNew, emoji }) {
 
 // ── food (diet) ──────────────────────────────────────────────────────────
 async function loadItems() {
-  state.items = await apiWithGuest("/api/items");
-  state.itemLinks = await apiWithGuest("/api/item-links");
+  state.items = await api("/api/items");
+  state.itemLinks = await api("/api/item-links");
   renderFoodTypeahead();
 }
 function childrenOf(parentId) {
@@ -280,7 +355,7 @@ function clearIntakeForm() {
 
 $("#save-intake").addEventListener("click", async () => {
   if (!state.mealDraft.length) { toast("Add at least one food first", "error"); return; }
-  await apiWithGuest("/api/intake", {
+  await api("/api/intake", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       food_ids: state.mealDraft.map((d) => d.food_id),
@@ -296,7 +371,7 @@ $("#save-intake").addEventListener("click", async () => {
 });
 
 async function loadIntakeLog() {
-  const rows = await apiWithGuest(`/api/intake?frm=${encodeURIComponent(daysAgoIso(14))}`);
+  const rows = await api(`/api/intake?frm=${encodeURIComponent(daysAgoIso(14))}`);
   const groups = new Map();
   for (const line of rows) {
     if (!groups.has(line.intake_id)) groups.set(line.intake_id, []);
@@ -313,7 +388,7 @@ async function loadIntakeLog() {
     const actions = document.createElement("div");
     actions.className = "actions";
     actions.appendChild(editTimeButton(lines[0].consumed_at, async (iso) => {
-      await apiJsonWithGuest(`/api/intake/group/${intakeId}`, "PATCH", { consumed_at: iso });
+      await apiJson(`/api/intake/group/${intakeId}`, "PATCH", { consumed_at: iso });
       await loadIntakeLog(); await loadTimeline();
     }));
     if (state.principal.role === "owner") {
@@ -321,7 +396,7 @@ async function loadIntakeLog() {
       del.className = "small ghost"; del.textContent = "🗑";
       del.addEventListener("click", async () => {
         if (!confirm("Delete this whole meal?")) return;
-        await apiWithGuest(`/api/intake/group/${intakeId}`, { method: "DELETE" });
+        await api(`/api/intake/group/${intakeId}`, { method: "DELETE" });
         await loadIntakeLog(); await loadTimeline();
       });
       actions.appendChild(del);
@@ -330,8 +405,8 @@ async function loadIntakeLog() {
     ul.appendChild(li);
   }
 }
-function apiJsonWithGuest(path, method, body) {
-  return apiWithGuest(path, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+function apiJson(path, method, body) {
+  return api(path, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 }
 function editTimeButton(currentIso, onSave) {
   const btn = document.createElement("button");
@@ -363,14 +438,14 @@ function openNewItemModal(name) {
 function closeNewItemModal() { $("#newitem-modal").classList.add("hidden"); }
 $("#newitem-cancel").addEventListener("click", closeNewItemModal);
 $("#newitem-leaf").addEventListener("click", async () => {
-  const item = await apiJsonWithGuest("/api/items", "POST", { name: _pendingNewItemName });
+  const item = await apiJson("/api/items", "POST", { name: _pendingNewItemName });
   closeNewItemModal();
   await loadItems();
   const fresh = state.items.find((i) => i._id === item._id) || item;
   selectFoodItem(fresh, false);
 });
 $("#newitem-parent").addEventListener("click", async () => {
-  const item = await apiJsonWithGuest("/api/items", "POST", { name: _pendingNewItemName });
+  const item = await apiJson("/api/items", "POST", { name: _pendingNewItemName });
   closeNewItemModal();
   await loadItems();
   const fresh = state.items.find((i) => i._id === item._id) || item;
@@ -411,8 +486,8 @@ function renderSuboptionList() {
     add.type = "button"; add.className = "chip new";
     add.textContent = `+ Add & link "${q.trim()}"`;
     add.addEventListener("click", async () => {
-      const created = await apiJsonWithGuest("/api/items", "POST", { name: q.trim() });
-      await apiJsonWithGuest("/api/item-links", "POST", { child: created._id, parent: ctx.parentItem._id });
+      const created = await apiJson("/api/items", "POST", { name: q.trim() });
+      await apiJson("/api/item-links", "POST", { child: created._id, parent: ctx.parentItem._id });
       await loadItems();
       ctx.ticked.set(created._id, created.name);
       $("#suboption-input").value = "";
@@ -433,7 +508,7 @@ $("#suboption-done").addEventListener("click", async () => {
   for (const [id, name] of ctx.ticked) {
     const existingLink = state.itemLinks.some((l) => l.child === id && l.parent === ctx.parentItem._id);
     if (!existingLink) {
-      await apiJsonWithGuest("/api/item-links", "POST", { child: id, parent: ctx.parentItem._id });
+      await apiJson("/api/item-links", "POST", { child: id, parent: ctx.parentItem._id });
     }
     addToDraft({ _id: id, name });
   }
@@ -443,7 +518,7 @@ $("#suboption-done").addEventListener("click", async () => {
 
 // ── holidays ─────────────────────────────────────────────────────────────
 async function loadHolidays() {
-  const rows = await apiWithGuest(`/api/holidays?frm=${daysAgoIso(14).slice(0, 10)}`);
+  const rows = await api(`/api/holidays?frm=${daysAgoIso(14).slice(0, 10)}`);
   const ul = $("#holiday-list");
   ul.innerHTML = "";
   for (const h of rows) {
@@ -454,7 +529,7 @@ async function loadHolidays() {
       del.className = "small ghost"; del.textContent = "🗑";
       del.addEventListener("click", async () => {
         if (!confirm("Delete this holiday?")) return;
-        await apiWithGuest(`/api/holidays/${h._id}`, { method: "DELETE" });
+        await api(`/api/holidays/${h._id}`, { method: "DELETE" });
         await loadHolidays(); await loadTimeline();
       });
       li.appendChild(del);
@@ -466,7 +541,7 @@ async function loadHolidays() {
 $("#add-holiday").addEventListener("click", async () => {
   const start = $("#holiday-start").value, stop = $("#holiday-stop").value;
   if (!start || !stop || !$("#holiday-location").value) { toast("Start, stop, and location are required", "error"); return; }
-  await apiJsonWithGuest("/api/holidays", "POST", {
+  await apiJson("/api/holidays", "POST", {
     start, stop, location: $("#holiday-location").value, name: $("#holiday-name").value || null,
   });
   $("#holiday-start").value = ""; $("#holiday-stop").value = "";
@@ -527,7 +602,7 @@ $("#body-tab-back").addEventListener("click", () => {
 });
 
 async function loadSymptomItems() {
-  state.symptomItems = await apiWithGuest("/api/symptom-items");
+  state.symptomItems = await api("/api/symptom-items");
   renderSymptomTypeahead();
 }
 function renderSymptomTypeahead() {
@@ -538,7 +613,7 @@ function renderSymptomTypeahead() {
     query: q,
     onTap: (it) => { state.selectedSymptoms.set(it._id, it.name); $("#symptom-input").value = ""; renderSymptomTypeahead(); renderSelectedSymptoms(); },
     onAddNew: async (name) => {
-      const created = await apiJsonWithGuest("/api/symptom-items", "POST", { name });
+      const created = await apiJson("/api/symptom-items", "POST", { name });
       await loadSymptomItems();
       state.selectedSymptoms.set(created._id, created.name);
       $("#symptom-input").value = "";
@@ -561,7 +636,7 @@ function renderSelectedSymptoms() {
 async function loadTodayHealth() {
   const today = new Date().toISOString().slice(0, 10);
   $("#routine-event-at").value = nowLocalInput();
-  const rows = await apiWithGuest(`/api/health?date=${today}`);
+  const rows = await api(`/api/health?date=${today}`);
   if (!rows.length) return;
   const h = rows[0];
   if (h.event_at) $("#routine-event-at").value = isoToLocalInput(h.event_at);
@@ -579,7 +654,7 @@ async function loadTodayHealth() {
 }
 
 $("#save-routine").addEventListener("click", async () => {
-  await apiJsonWithGuest("/api/health", "POST", {
+  await apiJson("/api/health", "POST", {
     event_at: toIso($("#routine-event-at").value),
     temperature_celsius: $("#temp-input").value ? parseFloat($("#temp-input").value) : null,
     energy: parseInt($("#energy-range").value, 10),
@@ -595,7 +670,7 @@ $("#save-routine").addEventListener("click", async () => {
 
 // ── bathroom events ──────────────────────────────────────────────────────
 async function loadBathroomItems() {
-  state.bathroomItems = await apiWithGuest("/api/bathroom-items");
+  state.bathroomItems = await api("/api/bathroom-items");
   renderBathroomTypeahead();
 }
 function renderBathroomTypeahead() {
@@ -606,7 +681,7 @@ function renderBathroomTypeahead() {
     query: q,
     onTap: (it) => { state.selectedBathroomKind = it; $("#bathroom-selected").textContent = it.name; $("#bathroom-input").value = ""; renderBathroomTypeahead(); },
     onAddNew: async (name) => {
-      const created = await apiJsonWithGuest("/api/bathroom-items", "POST", { name });
+      const created = await apiJson("/api/bathroom-items", "POST", { name });
       await loadBathroomItems();
       state.selectedBathroomKind = created;
       $("#bathroom-selected").textContent = created.name;
@@ -626,8 +701,7 @@ $("#log-be").addEventListener("click", async () => {
   fd.set("notes", $("#be-notes").value || "");
   const file = $("#be-photo").files[0];
   if (file) fd.set("photo", file);
-  const headers = window.__guestToken ? { "X-Auth-Token": window.__guestToken } : {};
-  const res = await fetch("/api/bathroom-events", { method: "POST", credentials: "include", headers, body: fd });
+  const res = await fetch("/api/bathroom-events", { method: "POST", credentials: "include", body: fd });
   if (!res.ok) { const d = await res.json().catch(() => ({})); toast(d.detail || "Failed to log event", "error"); return; }
   toast("Bathroom event logged");
   state.selectedBathroomKind = null;
@@ -640,7 +714,7 @@ $("#log-be").addEventListener("click", async () => {
 $("#add-note").addEventListener("click", async () => {
   const text = $("#note-input").value.trim();
   if (!text) return;
-  await apiJsonWithGuest("/api/notes", "POST", { text, event_at: toIso($("#note-event-at").value) });
+  await apiJson("/api/notes", "POST", { text, event_at: toIso($("#note-event-at").value) });
   $("#note-input").value = "";
   toast("Note added");
   await loadTimeline();
@@ -650,7 +724,7 @@ $("#note-event-at").value = nowLocalInput();
 // ── timeline ─────────────────────────────────────────────────────────────
 async function loadTimeline() {
   const frm = daysAgoIso(14);
-  const data = await apiWithGuest(`/api/timeline?frm=${encodeURIComponent(frm)}`);
+  const data = await api(`/api/timeline?frm=${encodeURIComponent(frm)}`);
   const bandsEl = $("#holiday-bands");
   bandsEl.innerHTML = "";
   for (const h of data.holidays || []) {
@@ -680,12 +754,12 @@ function renderTimelineItem(entry) {
     const names = lines.map((l) => (state.items.find((i) => i._id === l.food_id)?.name) || l.food_id).join(", ");
     body.textContent = `🍽️ ${names} (${lines[0].where}${lines[0].where_name ? " @ " + lines[0].where_name : ""})`;
     actions.appendChild(editTimeButton(entry.event_at, async (iso) => {
-      await apiJsonWithGuest(`/api/intake/group/${entry.doc.intake_id}`, "PATCH", { consumed_at: iso });
+      await apiJson(`/api/intake/group/${entry.doc.intake_id}`, "PATCH", { consumed_at: iso });
       await loadTimeline();
     }));
     if (state.principal.role === "owner") {
       actions.appendChild(deleteButton(async () => {
-        await apiWithGuest(`/api/intake/group/${entry.doc.intake_id}`, { method: "DELETE" }); await loadTimeline();
+        await api(`/api/intake/group/${entry.doc.intake_id}`, { method: "DELETE" }); await loadTimeline();
       }));
     }
   } else if (entry.type === "routine") {
@@ -694,7 +768,7 @@ function renderTimelineItem(entry) {
     body.textContent = `🩺 temp ${h.temperature_celsius ?? "—"}°C · energy ${h.energy ?? "—"} · sleep ${h.sleep_hours ?? "—"}h` +
       (symptoms ? ` · symptoms: ${symptoms}` : "") + (h.pain_scale != null ? ` · pain ${h.pain_scale}/10` : "");
     actions.appendChild(editTimeButton(entry.event_at, async (iso) => {
-      await apiJsonWithGuest(`/api/health/${h._id}`, "PATCH", { event_at: iso }); await loadTimeline();
+      await apiJson(`/api/health/${h._id}`, "PATCH", { event_at: iso }); await loadTimeline();
     }));
   } else if (entry.type === "bathroom") {
     const b = entry.doc;
@@ -708,24 +782,23 @@ function renderTimelineItem(entry) {
     }
     actions.appendChild(editTimeButton(entry.event_at, async (iso) => {
       const fd = new FormData(); fd.set("event_at", iso);
-      const headers = window.__guestToken ? { "X-Auth-Token": window.__guestToken } : {};
-      await fetch(`/api/bathroom-events/${b._id}`, { method: "PATCH", credentials: "include", headers, body: fd });
+      await fetch(`/api/bathroom-events/${b._id}`, { method: "PATCH", credentials: "include", body: fd });
       await loadTimeline();
     }));
     if (state.principal.role === "owner") {
       actions.appendChild(deleteButton(async () => {
-        await apiWithGuest(`/api/bathroom-events/${b._id}`, { method: "DELETE" }); await loadTimeline();
+        await api(`/api/bathroom-events/${b._id}`, { method: "DELETE" }); await loadTimeline();
       }));
     }
   } else if (entry.type === "note") {
     const n = entry.doc;
     body.textContent = `📝 ${n.text}`;
     actions.appendChild(editTimeButton(entry.event_at, async (iso) => {
-      await apiJsonWithGuest(`/api/notes/${n._id}`, "PATCH", { event_at: iso }); await loadTimeline();
+      await apiJson(`/api/notes/${n._id}`, "PATCH", { event_at: iso }); await loadTimeline();
     }));
     if (state.principal.role === "owner") {
       actions.appendChild(deleteButton(async () => {
-        await apiWithGuest(`/api/notes/${n._id}`, { method: "DELETE" }); await loadTimeline();
+        await api(`/api/notes/${n._id}`, { method: "DELETE" }); await loadTimeline();
       }));
     }
   }
@@ -736,11 +809,8 @@ function renderTimelineItem(entry) {
   return div;
 }
 async function loadPhotoBlobUrl(path) {
-  // an <img src="..."> can't carry the X-Auth-Token header a guest session
-  // needs, so fetch the bytes ourselves and hand the <img> a blob: URL.
   try {
-    const headers = window.__guestToken ? { "X-Auth-Token": window.__guestToken } : {};
-    const res = await fetch(path, { credentials: "include", headers });
+    const res = await fetch(path, { credentials: "include" });
     if (!res.ok) return null;
     return URL.createObjectURL(await res.blob());
   } catch (_) {
@@ -758,7 +828,7 @@ function deleteButton(onClick) {
 async function runAsk(save) {
   const question = $("#ask-question").value.trim();
   if (!question) { toast("Type a question first", "error"); return; }
-  const res = await apiJsonWithGuest("/api/ask", "POST", {
+  const res = await apiJson("/api/ask", "POST", {
     question,
     frm: $("#ask-from").value ? toIso($("#ask-from").value + "T00:00") : null,
     to: $("#ask-to").value ? toIso($("#ask-to").value + "T23:59") : null,
@@ -773,7 +843,7 @@ $("#ask-save-btn").addEventListener("click", () => runAsk(true));
 
 // ── findings ─────────────────────────────────────────────────────────────
 async function loadFindings() {
-  const rows = await apiWithGuest("/api/findings");
+  const rows = await api("/api/findings");
   const ul = $("#findings-list");
   ul.innerHTML = "";
   for (const f of rows) {
@@ -795,6 +865,7 @@ async function bootApp() {
   $("#intake-consumed-at").value = nowLocalInput();
   await Promise.all([loadItems(), loadSymptomItems(), loadBathroomItems()]);
   await Promise.all([loadIntakeLog(), loadHolidays(), loadTodayHealth(), loadTimeline(), loadFindings()]);
+  await loadSecuritySection();
 }
 
 applyStoredTheme();

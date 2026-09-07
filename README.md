@@ -54,14 +54,14 @@ Digestary is built to make that connection visible:
 | **Ask** | A free-form question box that always returns the relevant logged rows for a window — works with zero AI. Connect an MCP client for a written answer over the same data. |
 | **Findings** | Saved correlations and Q&A, so a later session (or a different device, or a doctor) can read the context without re-analysing. |
 | **AI (MCP) — always on, LLM optional** | A small **MCP server ships with the app** as a first-class part of the stack. Connect any MCP client (Claude Code, Hermes, Continue, Cline, …) or don't — the journal works fully offline. |
-| **Login / guest access** | Run it locally with no login, or turn on real username/password accounts plus an optional **guest code** that lets someone (on a phone at a restaurant, on holiday) add entries without being able to delete anything or manage the catalog. |
+| **Login / passkeys** | Run it locally with no login, or turn on real username/password accounts. Optionally add a **passkey** (Face ID / Touch ID / Windows Hello / a hardware key) as a 2nd factor per account — requires HTTPS. |
 
 ---
 
 ## Quick start (Docker)
 
 ```bash
-git clone <REPO_URL> digestary
+git clone https://github.com/Pythm/digestary.git digestary
 cd digestary
 cp .env.example .env         # edit .env: set a strong COUCHDB_PASSWORD (and,
                               # if you turn on AUTH_MODE=public, SESSION_SECRET
@@ -97,7 +97,7 @@ routine, log a bathroom event, and check the 14-day timeline.
                                                         ▼
                                               ┌─────────────────────┐
                                               │   couchdb (3.x)      │
-                                              │   11 databases:       │
+                                              │   12 databases:       │
                                               │  items, item_links,   │
                                               │  intake, holidays,    │
                                               │  symptom_items,       │
@@ -105,7 +105,7 @@ routine, log a bathroom event, and check the 14-day timeline.
                                               │  bathroom_items,      │
                                               │  bathroom_events,     │
                                               │  notes, findings,      │
-                                              │  users                │
+                                              │  users, passkeys      │
                                               └─────────────────────┘
                                                         ▲
                                                         │ MCP: reads everything,
@@ -125,7 +125,7 @@ routine, log a bathroom event, and check the 14-day timeline.
 ```
 
 - **`app`** — a small FastAPI service that serves the static frontend and
-  exposes a JSON REST API. On first start it **auto-creates the 11 databases
+  exposes a JSON REST API. On first start it **auto-creates the 12 databases
   and leaves them empty** — **no food catalog is seeded**; the item list
   fills in as the user logs.
 - **`couchdb`** — an [Apache CouchDB 3.x](https://couchdb.apache.org/)
@@ -178,6 +178,7 @@ one time.
 | `notes` | Free-text "other information", each with a single `event_at`. |
 | `findings` | AI correlations and saved Q&A. The only place an LLM is allowed to write (besides an item's `emoji`). |
 | `users` | Login accounts (`AUTH_MODE=public` only) — username, a salted/hashed password, role. |
+| `passkeys` | Enrolled WebAuthn credentials (optional 2nd factor) — one document per passkey: which user it belongs to, its public key, sign count, nickname. See "Passkeys" below. |
 
 ---
 
@@ -272,7 +273,7 @@ Or point at the always-on HTTP endpoint (`http://<host>:8090`, requires the
 
 ---
 
-## Login and guest access
+## Login
 
 - **`AUTH_MODE=local` (default):** no login — open on your LAN. Good for a
   personal home device; anyone on the network can use it.
@@ -283,15 +284,43 @@ Or point at the always-on HTTP endpoint (`http://<host>:8090`, requires the
   `POST /api/auth/users` while logged in) for other household members.
   `SESSION_SECRET` (generate with `openssl rand -hex 32`) is required in
   this mode.
-- **`GUEST_TOKEN`** (either mode): a shared code that lets someone *add*
-  diet / routine / bathroom / notes entries from a device with no account —
-  a phone at a restaurant, a tablet on holiday — but **never delete anything
-  or manage the food catalog**. Every entry still records an `author`, so
-  different people's logs stay distinguishable.
-- **Not yet built:** a passkey (WebAuthn/FIDO2) or TOTP second factor. The
-  password/session layer above is real, not a placeholder, so this can be
-  added on top of it later without a rewrite — it's a deliberate v2, not
-  because the current login is a stub.
+- There is no guest / no-account access — every write requires either an
+  owner session (`public` mode) or is the implicit sole owner (`local`
+  mode).
+- **Not yet built:** a TOTP second factor. Passkeys (below) cover the
+  "2nd factor" need for now; TOTP remains a possible future addition.
+
+## Passkeys (WebAuthn 2nd factor)
+
+Once `AUTH_MODE=public` is set up, an owner can optionally add a **passkey**
+(Face ID, Touch ID, Windows Hello, or a hardware security key) as a second
+factor from the **Security** section of the app, after logging in with their
+password. It's per-account and opt-in — an account with no passkey enrolled
+keeps logging in with just its password, exactly as before.
+
+- **Required env vars** (`.env`) — leave both blank to disable the feature
+  entirely (the Security section stays hidden, login stays password-only,
+  no errors anywhere):
+  - `WEBAUTHN_RP_ID` — the bare domain, e.g. `digestary.example.com`
+    (no scheme, no port).
+  - `WEBAUTHN_ORIGIN` — the full origin the browser sees, e.g.
+    `https://digestary.example.com` (no trailing slash). Must match exactly
+    what's in the browser's address bar.
+  - `WEBAUTHN_RP_NAME` (optional, default `Digestary`) — the name shown in
+    the browser's passkey prompt.
+- **Requires HTTPS.** WebAuthn is a browser API that refuses to run outside
+  a secure context: `WEBAUTHN_ORIGIN` must be `https://`, or exactly
+  `http://localhost:<port>` (useful for local development only — real
+  devices on your LAN don't count as "localhost"). This app's documented
+  default deployment is a bare LAN IP over plain HTTP (see "Deploying on a
+  Proxmox LXC" below), so **passkeys will not work there** unless you also
+  put a TLS-terminating reverse proxy (Caddy, Nginx, etc.) in front with a
+  real hostname.
+- Once enrolled, `POST /api/auth/login` with the correct password returns
+  `{"mfa_required": true, ...}` instead of a session, and the UI
+  transparently prompts for the passkey to finish signing in. Removing all
+  of an account's passkeys (from the Security section) returns it to
+  password-only login.
 
 ---
 
@@ -300,22 +329,22 @@ Or point at the always-on HTTP endpoint (`http://<host>:8090`, requires the
 1. **Create an LXC container** with at least 1 vCPU, 1–2 GB RAM, 5 GB disk.
 2. **Install Docker inside the LXC:**
    ```bash
-    apt-get update
-    apt-get install -y docker.io
-    systemctl enable --now docker
-    usermod -aG docker $USER     # re-login after this
+   apt-get update
+   apt-get install -y docker.io
+   systemctl enable --now docker
+   usermod -aG docker $USER     # re-login after this
    ```
 3. **Get the app:**
    ```bash
-  git clone <REPO_URL> /opt/digestary
-  cd /opt/digestary
-  cp .env.example .env       # set COUCHDB_PASSWORD, MCP_SECRET, and
+   git clone https://github.com/Pythm/digestary.git /opt/digestary
+   cd /opt/digestary
+   cp .env.example .env       # set COUCHDB_PASSWORD, MCP_SECRET, and
                               # (if AUTH_MODE=public) SESSION_SECRET +
                               # OWNER_USERNAME/OWNER_PASSWORD
    ```
 4. **Start it:**
    ```bash
-  docker compose up -d --build
+   docker compose up -d --build
    ```
 5. **Open the UI:** `http://<lxc-ip>:8080`
 6. **Back up regularly:** `scripts/backup.sh`
@@ -356,11 +385,11 @@ path, and restart.
 - **`local` mode (default):** open on your LAN — anyone on the network can
   reach `http://<ip>:8080`. That's fine for a personal home device.
 - **`public` mode:** real accounts (PBKDF2-HMAC-SHA256, per-user salt, a
-  signed session cookie, rate-limited login attempts) for owner access,
-  plus the optional add-only guest code.
+  signed session cookie, rate-limited login attempts) for owner access, with
+  an optional per-account passkey 2nd factor (see "Passkeys" above — it
+  needs a TLS reverse proxy to actually work).
 - **Do not expose the UI to the public internet without a reverse proxy**
-  (Caddy/Nginx) that terminates TLS, unless you deliberately want public
-  guest logging.
+  (Caddy/Nginx) that terminates TLS.
 - The **CouchDB admin port is never published to the host** beyond the
   optional direct-access port for backups; only the app's HTTP port (8080)
   and the MCP port (8090) are meant to be LAN-reachable.

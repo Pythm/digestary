@@ -23,8 +23,7 @@ Authentication (AUTH_MODE):
    * "local" (default) -> no login, everyone is the owner. For a private
      home device.
    * "public"           -> owner actions require a logged-in session
-     (see auth.py); a GUEST_TOKEN (if set) still allows add-only access
-     with no account, for a one-off shared device.
+     (see auth.py).
 """
 from __future__ import annotations
 
@@ -73,7 +72,7 @@ def owner_dep(p: Principal = Depends(resolve_principal)) -> Principal:
 
 
 def author_of(p: Principal) -> str:
-    return p.username if p.role == "owner" else f"guest:{p.username}"
+    return p.username
 
 
 # ── request models ──────────────────────────────────────────────────────────
@@ -85,6 +84,16 @@ class LoginIn(BaseModel):
 class CreateUserIn(BaseModel):
     username: str
     password: str
+
+
+class PasskeyRegisterCompleteIn(BaseModel):
+    nickname: Optional[str] = None
+    credential: dict
+
+
+class PasskeyLoginVerifyIn(BaseModel):
+    ticket: str
+    credential: dict
 
 
 class ItemIn(BaseModel):
@@ -152,7 +161,7 @@ def get_config():
     return {
         "app_name": "Digestary",
         "auth_mode": auth_cfg.mode,
-        "guest_enabled": bool(auth_cfg.guest_token),
+        "passkeys_enabled": auth_cfg.passkeys_enabled,
         "fever_threshold": FEVER_THRESHOLD,
         "language": LANGUAGE,
     }
@@ -164,15 +173,24 @@ def health_check():
     return {"status": "ok" if ok else "degraded", "couchdb": ok}
 
 
+def _set_session_cookie(response: Response, session: dict) -> dict:
+    response.set_cookie(SESSION_COOKIE, session["session_token"], httponly=True, samesite="lax",
+                         secure=auth_cfg.cookie_secure, max_age=auth_cfg.session_days * 86400)
+    return {"username": session["username"], "role": session["role"]}
+
+
 # ── auth ──────────────────────────────────────────────────────────────────────
 @app.post("/api/auth/login")
 def login(body: LoginIn, response: Response):
+    """Password step. If the account has no passkey enrolled this issues the
+    session directly; if it does, this returns an {"mfa_required": true, ...}
+    WebAuthn challenge instead — see POST /api/auth/passkeys/login/verify."""
     if auth_cfg.mode != "public":
         raise HTTPException(status_code=400, detail="login is only used in AUTH_MODE=public")
-    token = _auth["login"](body.username, body.password)
-    response.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="lax",
-                         secure=auth_cfg.cookie_secure, max_age=auth_cfg.session_days * 86400)
-    return {"username": body.username.lower().strip(), "role": "owner"}
+    result = _auth["login"](body.username, body.password)
+    if result.get("mfa_required"):
+        return {"mfa_required": True, "ticket": result["ticket"], "options": result["options"]}
+    return _set_session_cookie(response, result)
 
 
 @app.post("/api/auth/logout")
@@ -189,11 +207,44 @@ def me(p: Principal = Depends(resolve_principal)):
     return {"username": p.username, "role": p.role}
 
 
+# ── passkeys (WebAuthn) — optional per-account 2nd factor, see auth.py ──────
+@app.post("/api/auth/passkeys/login/verify")
+def passkey_login_verify(body: PasskeyLoginVerifyIn, response: Response):
+    """No auth dependency: completing this step IS how the session gets
+    issued, same as the password step in POST /api/auth/login."""
+    if auth_cfg.mode != "public":
+        raise HTTPException(status_code=400, detail="login is only used in AUTH_MODE=public")
+    result = _auth["complete_passkey_login"](body.ticket, body.credential)
+    return _set_session_cookie(response, result)
+
+
+@app.get("/api/auth/passkeys")
+def list_passkeys(p: Principal = Depends(owner_dep)):
+    return [{"_id": pk["_id"], "nickname": pk.get("nickname"), "created_at": pk.get("created_at")}
+            for pk in _auth["list_passkeys"](p.username)]
+
+
+@app.post("/api/auth/passkeys/register/begin")
+def passkey_register_begin(p: Principal = Depends(owner_dep)):
+    return _auth["begin_passkey_registration"](p.username)
+
+
+@app.post("/api/auth/passkeys/register/complete")
+def passkey_register_complete(body: PasskeyRegisterCompleteIn, p: Principal = Depends(owner_dep)):
+    doc = _auth["complete_passkey_registration"](p.username, body.nickname, body.credential)
+    return {"_id": doc["_id"], "nickname": doc.get("nickname"), "created_at": doc.get("created_at")}
+
+
+@app.delete("/api/auth/passkeys/{doc_id}")
+def delete_passkey(doc_id: str, p: Principal = Depends(owner_dep)):
+    _auth["delete_passkey"](p.username, doc_id)
+    return {"deleted": doc_id}
+
+
 @app.post("/api/auth/users")
 def create_user(body: CreateUserIn, p: Principal = Depends(owner_dep)):
     """Add another owner account to this household's stack (e.g. a partner
-    who wants their own login). Guest access stays the shared GUEST_TOKEN —
-    this endpoint is only for additional full (owner) accounts."""
+    who wants their own login)."""
     return {k: v for k, v in _auth["create_user"](body.username, body.password).items()
             if k not in ("password_hash", "salt")}
 
@@ -223,8 +274,6 @@ def get_item(item_id: str):
 
 @app.post("/api/items")
 def create_item(body: ItemIn, p: Principal = Depends(resolve_principal)):
-    if auth_cfg.mode == "public" and p.role != "owner":
-        raise HTTPException(status_code=403, detail="only the owner can add new food items")
     item_id = body.name.strip().lower().replace(" ", "_")
     if not item_id:
         raise HTTPException(status_code=400, detail="name required")
@@ -265,8 +314,6 @@ def list_item_links():
 
 @app.post("/api/item-links")
 def create_item_link(body: ItemLinkIn, p: Principal = Depends(resolve_principal)):
-    if auth_cfg.mode == "public" and p.role != "owner":
-        raise HTTPException(status_code=403, detail="only the owner can manage the catalog")
     link_id = f"link-{body.child}-{body.parent}"
     return couch.put("item_links", link_id, {"child": body.child, "parent": body.parent})
 
@@ -654,15 +701,14 @@ def create_finding(
     body: dict,
     request: Request,
     x_mcp_secret: Optional[str] = Header(default=None, alias="X-MCP-Secret"),
-    x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
 ):
     """Only an MCP caller (with the secret) or the owner may write a finding
     — this is the ONLY writable surface for a connected LLM, besides the
-    item-emoji PATCH. Independent of X-Auth-Token: an MCP client authenticates
-    with the secret alone and must not also need a web session."""
+    item-emoji PATCH. An MCP client authenticates with the secret alone and
+    must not also need a web session."""
     is_mcp = bool(MCP_SECRET) and x_mcp_secret == MCP_SECRET
     principal = None if is_mcp else _auth["try_resolve_principal"](
-        x_auth_token, request.cookies.get(SESSION_COOKIE))
+        request.cookies.get(SESSION_COOKIE))
     is_owner = bool(principal) and principal.role == "owner"
     if not (is_mcp or is_owner):
         raise HTTPException(status_code=401,

@@ -36,7 +36,7 @@ class FakeCouch:
     """A tiny stand-in for CouchDB that stores docs (+ attachments) per db."""
 
     DBS = ["items", "item_links", "intake", "holidays", "symptom_items", "health",
-           "bathroom_items", "bathroom_events", "notes", "findings", "users"]
+           "bathroom_items", "bathroom_events", "notes", "findings", "users", "passkeys"]
 
     def __init__(self):
         self.dbs: dict[str, dict] = {d: {} for d in self.DBS}

@@ -1,6 +1,6 @@
 """AUTH_MODE=public tests: real login (username/password + session cookie),
-the guest token (add-only, no account), rate limiting, and findings write
-gating with no owner session at all (only an MCP secret).
+rate limiting, the passkey (WebAuthn) 2nd-factor enrollment/login round trip,
+and findings write gating with no owner session at all (only an MCP secret).
 """
 import os
 import sys
@@ -16,9 +16,11 @@ os.environ["COUCHDB_URL"] = "http://fake:5984"
 os.environ["COUCHDB_USER"] = "admin"
 os.environ["COUCHDB_PASSWORD"] = ""
 os.environ["MCP_SECRET"] = "the-mcp-secret"
-os.environ["GUEST_TOKEN"] = "guest456"
 os.environ["SESSION_SECRET"] = "test-session-secret-not-for-prod"
 os.environ["FEVER_THRESHOLD"] = "37.8"
+os.environ["WEBAUTHN_RP_ID"] = "localhost"
+os.environ["WEBAUTHN_RP_NAME"] = "Digestary Test"
+os.environ["WEBAUTHN_ORIGIN"] = "http://localhost"
 
 for m in list(sys.modules):
     if m in ("server", "couch", "auth"):
@@ -68,18 +70,6 @@ def test_wrong_password_is_rejected_and_rate_limited():
     assert still_locked.status_code == 429
 
 
-def test_guest_token_can_add_but_not_delete_or_manage_catalog():
-    r = client.post("/api/intake", json={"food_ids": ["eple"]}, headers={"X-Auth-Token": "guest456"})
-    assert r.status_code == 200
-    intake_id = r.json()["intake_id"]
-
-    r2 = client.delete(f"/api/intake/group/{intake_id}", headers={"X-Auth-Token": "guest456"})
-    assert r2.status_code == 403
-
-    r3 = client.post("/api/items", json={"name": "ny_mat"}, headers={"X-Auth-Token": "guest456"})
-    assert r3.status_code == 403
-
-
 def test_no_token_at_all_is_rejected():
     r = client.post("/api/notes", json={"text": "hi"})
     assert r.status_code == 401
@@ -118,3 +108,63 @@ def test_creating_a_second_owner_account_requires_an_existing_owner():
     r2 = client.post("/api/auth/users", json={"username": "partner", "password": "another-strong-pw"})
     assert r2.status_code == 200
     assert "password_hash" not in r2.json()
+
+
+def test_passkey_register_then_becomes_required_second_factor_on_login():
+    """Full round trip against the real webauthn verification path (via a
+    software authenticator — see soft_authenticator.py), matching how the
+    frontend's navigator.credentials.create()/get() calls are wired in
+    app.js: begin -> browser ceremony -> complete, then login -> mfa_required
+    -> verify."""
+    from soft_authenticator import SoftAuthenticator
+
+    client.post("/api/auth/login", json={"username": "owner1", "password": "correct-horse-battery"})
+    assert client.get("/api/config").json()["passkeys_enabled"] is True
+
+    options = client.post("/api/auth/passkeys/register/begin").json()
+    authenticator = SoftAuthenticator()
+    credential = authenticator.create(options["challenge"], "localhost", "http://localhost")
+    reg = client.post("/api/auth/passkeys/register/complete",
+                       json={"nickname": "Test Key", "credential": credential})
+    assert reg.status_code == 200
+    assert reg.json()["nickname"] == "Test Key"
+    assert "public_key" not in reg.json()
+
+    # password alone must no longer be enough for this account
+    client.post("/api/auth/logout")
+    client.cookies.clear()
+    login = client.post("/api/auth/login", json={"username": "owner1", "password": "correct-horse-battery"})
+    assert login.status_code == 200
+    body = login.json()
+    assert body["mfa_required"] is True
+    assert "digestary_session" not in login.cookies
+
+    assertion = authenticator.get(body["options"]["challenge"], "localhost", "http://localhost")
+    verify = client.post("/api/auth/passkeys/login/verify",
+                          json={"ticket": body["ticket"], "credential": assertion})
+    assert verify.status_code == 200
+    assert verify.json() == {"username": "owner1", "role": "owner"}
+    assert "digestary_session" in verify.cookies
+
+    # a reused ticket must not work twice (single-use)
+    replay = client.post("/api/auth/passkeys/login/verify",
+                          json={"ticket": body["ticket"], "credential": assertion})
+    assert replay.status_code == 400
+
+    passkeys = client.get("/api/auth/passkeys").json()
+    assert len(passkeys) == 1
+    assert client.delete(f"/api/auth/passkeys/{passkeys[0]['_id']}").status_code == 200
+    assert client.get("/api/auth/passkeys").json() == []
+
+
+def test_passkeys_disabled_without_webauthn_env_config():
+    import auth as auth_module
+
+    for k in ("WEBAUTHN_RP_ID", "WEBAUTHN_ORIGIN"):
+        os.environ.pop(k, None)
+    try:
+        cfg = auth_module.AuthConfig()
+        assert cfg.passkeys_enabled is False
+    finally:
+        os.environ["WEBAUTHN_RP_ID"] = "localhost"
+        os.environ["WEBAUTHN_ORIGIN"] = "http://localhost"

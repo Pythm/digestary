@@ -3,5 +3,6 @@ uvicorn[standard]
 requests
 pydantic
 python-multipart
+webauthn==2.7.1
 pytest
 httpx

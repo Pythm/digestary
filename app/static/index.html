@@ -15,14 +15,6 @@
     </div>
     <button id="login-submit" style="width:100%">Sign in</button>
     <p class="sub" id="login-error" style="color:var(--danger)"></p>
-    <div id="guest-section" hidden>
-      <hr style="border-color:var(--border); margin:16px 0">
-      <label for="guest-token-input">Or enter a guest code (add-only, no account)</label>
-      <div class="row">
-        <input id="guest-token-input" type="text" placeholder="guest code">
-        <button id="guest-submit" class="ghost">Continue as guest</button>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -237,6 +229,17 @@
     <section class="card" id="findings-section">
       <h2>🔎 Findings</h2>
       <ul id="findings-list" class="log-list"></ul>
+    </section>
+
+    <!-- ── SECURITY (passkeys) ──────────────────────────────────────── -->
+    <section class="card hidden" id="security-section">
+      <h2>🔐 Security — passkeys</h2>
+      <p class="sub">Add a passkey (Face ID, Touch ID, Windows Hello, a hardware
+        key) as a second factor for your account. Once you have at least one,
+        signing in with your password will also ask for it. Requires HTTPS —
+        see the README.</p>
+      <ul id="passkey-list" class="log-list"></ul>
+      <button id="add-passkey-btn">➕ Add a passkey</button>
     </section>
   </main>
 </div>

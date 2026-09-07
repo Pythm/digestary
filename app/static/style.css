@@ -80,7 +80,6 @@ header.app-header .sub { color: var(--muted); font-size: 14px; }
   background: var(--card-2); color: var(--muted); border: 1px solid var(--border);
 }
 .badge.owner { color: var(--accent-2); border-color: var(--accent-2); }
-.badge.guest { color: var(--accent); border-color: var(--accent); }
 
 main { padding: 16px; display: flex; flex-direction: column; gap: 16px; }
 

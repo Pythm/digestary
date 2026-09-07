@@ -18,7 +18,6 @@ os.environ["COUCHDB_PASSWORD"] = ""
 os.environ["MCP_SECRET"] = "test-mcp-secret"
 os.environ["FEVER_THRESHOLD"] = "37.8"
 os.environ.pop("SESSION_SECRET", None)
-os.environ.pop("GUEST_TOKEN", None)
 
 for m in list(sys.modules):
     if m in ("server", "couch", "auth"):

@@ -52,8 +52,8 @@ services:
       MCP_SECRET: ${MCP_SECRET:-change-this-mcp-secret}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
       # ── auth mode: "local" (no login, everyone is the owner) or "public"
-      # (real username/password login; a GUEST_TOKEN still allows add-only
-      # access with no account, for a one-off shared device) ──
+      # (real username/password login; no guest/no-account access exists
+      # in either mode) ──
       AUTH_MODE: ${AUTH_MODE:-local}
       # first-boot bootstrap of the one owner account (public mode only) —
       # only used if the `users` database is still empty
@@ -62,7 +62,11 @@ services:
       # signs the login session cookie — required in public mode; generate
       # with `openssl rand -hex 32`
       SESSION_SECRET: ${SESSION_SECRET:-}
-      GUEST_TOKEN: ${GUEST_TOKEN:-}
+      # optional per-account passkey (WebAuthn) 2nd factor — blank disables
+      # it entirely; needs HTTPS in practice (see .env.example / README)
+      WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-}
+      WEBAUTHN_RP_NAME: ${WEBAUTHN_RP_NAME:-Digestary}
+      WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-}
       FEVER_THRESHOLD: ${FEVER_THRESHOLD:-37.8}
       # the language an LLM should use if asked to prefill items/symptoms/
       # bathroom kinds or fill in emoji — informational only, see README
