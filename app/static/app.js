@@ -207,7 +207,7 @@ function credentialToJson(cred) {
 // ── security — passkey enrollment/management (owner, public mode only) ───
 async function loadSecuritySection() {
   const show = state.principal.role === "owner" && state.config.auth_mode === "public" && state.config.passkeys_enabled;
-  $("#security-section").classList.toggle("hidden", !show);
+  $("#security-section").classList.toggle("feature-off", !show);
   if (!show) return;
   const rows = await api("/api/auth/passkeys");
   const ul = $("#passkey-list");
@@ -241,6 +241,27 @@ $("#add-passkey-btn").addEventListener("click", async () => {
     toast("Could not add passkey: " + e.message, "error");
   }
 });
+
+// ── sidebar / page navigation ───────────────────────────────────────────
+function openSidebar() {
+  $("#sidebar").classList.add("open");
+  $("#sidebar-backdrop").classList.remove("hidden");
+}
+function closeSidebar() {
+  $("#sidebar").classList.remove("open");
+  $("#sidebar-backdrop").classList.add("hidden");
+}
+$("#menu-btn").addEventListener("click", openSidebar);
+$("#sidebar-close").addEventListener("click", closeSidebar);
+$("#sidebar-backdrop").addEventListener("click", closeSidebar);
+
+function showPage(page) {
+  $$("[data-page]").forEach((el) => el.classList.toggle("hidden", el.dataset.page !== page));
+  $$(".nav-item").forEach((btn) => btn.classList.toggle("active", btn.dataset.target === page));
+  closeSidebar();
+  window.scrollTo(0, 0);
+}
+$$(".nav-item").forEach((btn) => btn.addEventListener("click", () => showPage(btn.dataset.target)));
 
 // ── theme ────────────────────────────────────────────────────────────────
 function applyStoredTheme() {
@@ -859,6 +880,7 @@ async function loadFindings() {
 
 // ── boot ─────────────────────────────────────────────────────────────────
 async function bootApp() {
+  showPage("home");
   bindPainRegions();
   setTempDisplay();
   $("#energy-label").textContent = ENERGY_LABELS[$("#energy-range").value];

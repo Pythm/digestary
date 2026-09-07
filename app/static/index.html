@@ -20,20 +20,31 @@
 
 <div id="app" class="hidden">
   <header class="app-header">
-    <div>
+    <button id="menu-btn" class="icon-btn" aria-label="Open menu">☰</button>
+    <div class="header-title">
       <h1>🍽️ Digestary</h1>
-      <div class="sub">Diet &amp; symptoms journal</div>
     </div>
-    <div class="row" style="flex:0; gap:8px; align-items:center;">
-      <span id="role-badge" class="badge owner hidden"></span>
-      <button id="theme-btn" class="icon-btn" title="Toggle light / dark theme">🌓</button>
-      <button id="logout-btn" class="icon-btn hidden" title="Sign out">⎋</button>
-    </div>
+    <button id="theme-btn" class="icon-btn" title="Toggle light / dark theme">🌓</button>
   </header>
 
+  <div id="sidebar-backdrop" class="sidebar-backdrop hidden"></div>
+  <nav id="sidebar" class="sidebar">
+    <div class="sidebar-head">
+      <h2>🍽️ Digestary</h2>
+      <button id="sidebar-close" class="icon-btn" aria-label="Close menu">✕</button>
+    </div>
+    <button class="nav-item active" data-target="home">🏠 Home</button>
+    <button class="nav-item" data-target="checkin">🩺 Daily Check-in</button>
+    <button class="nav-item" data-target="timeline">📆 Timeline</button>
+    <button class="nav-item" data-target="findings">🔎 Findings</button>
+    <button class="nav-item" data-target="holiday">🗓️ Holiday</button>
+    <button class="nav-item" data-target="settings">⚙️ Settings</button>
+  </nav>
+
   <main>
+    <!-- ── HOME: diet, bathroom events, notes ──────────────────────────── -->
     <!-- ── DIET ─────────────────────────────────────────────────────── -->
-    <section class="card" id="diet-section">
+    <section class="card" id="diet-section" data-page="home">
       <h2>🍽️ Diet — what did you eat?</h2>
       <div class="field">
         <label for="food-input">Type a food (your own words)</label>
@@ -75,8 +86,8 @@
     </section>
 
     <!-- ── CALENDAR / HOLIDAYS ──────────────────────────────────────── -->
-    <section class="card" id="holidays-section">
-      <h2>🗓️ Calendar — holidays</h2>
+    <section class="card hidden" id="holidays-section" data-page="holiday">
+      <h2>🗓️ Holiday</h2>
       <div class="row">
         <div class="field"><label for="holiday-start">From</label><input id="holiday-start" type="date"></div>
         <div class="field"><label for="holiday-stop">To</label><input id="holiday-stop" type="date"></div>
@@ -90,8 +101,8 @@
     </section>
 
     <!-- ── DAILY ROUTINE ────────────────────────────────────────────── -->
-    <section class="card" id="routine-section">
-      <h2>🩺 Daily routine</h2>
+    <section class="card hidden" id="routine-section" data-page="checkin">
+      <h2>🩺 Daily Check-in</h2>
       <div class="field">
         <label for="routine-event-at">Day</label>
         <input id="routine-event-at" type="datetime-local">
@@ -183,7 +194,7 @@
     </section>
 
     <!-- ── BATHROOM EVENTS ──────────────────────────────────────────── -->
-    <section class="card" id="bathroom-section">
+    <section class="card" id="bathroom-section" data-page="home">
       <h2>🚻 Bathroom events</h2>
       <div class="field"><label for="bathroom-input">Type a kind (your own words)</label><input id="bathroom-input" type="text" placeholder="e.g. pee"></div>
       <div id="bathroom-list" class="typeahead-list"></div>
@@ -195,7 +206,7 @@
     </section>
 
     <!-- ── NOTES ────────────────────────────────────────────────────── -->
-    <section class="card" id="notes-section">
+    <section class="card" id="notes-section" data-page="home">
       <h2>📝 Notes</h2>
       <div class="field"><label for="note-input">Other information</label><textarea id="note-input" placeholder="e.g. started a new supplement"></textarea></div>
       <div class="field"><label for="note-event-at">When it refers to</label><input id="note-event-at" type="datetime-local"></div>
@@ -203,14 +214,14 @@
     </section>
 
     <!-- ── TIMELINE ─────────────────────────────────────────────────── -->
-    <section class="card" id="timeline-section">
+    <section class="card hidden" id="timeline-section" data-page="timeline">
       <h2>📆 Timeline (last 14 days)</h2>
       <div id="holiday-bands"></div>
       <div id="timeline-list"></div>
     </section>
 
     <!-- ── ASK ──────────────────────────────────────────────────────── -->
-    <section class="card" id="ask-section">
+    <section class="card hidden" id="ask-section" data-page="findings">
       <h2>💬 Ask</h2>
       <p class="sub">Always returns the relevant rows for the window — no server-side AI. Connect an MCP client (Claude Code, Hermes, …) for a written answer, live against this same data.</p>
       <div class="field"><label for="ask-question">Question</label><input id="ask-question" type="text" placeholder="e.g. which foods show up before my stomach pain?"></div>
@@ -226,14 +237,31 @@
     </section>
 
     <!-- ── FINDINGS ─────────────────────────────────────────────────── -->
-    <section class="card" id="findings-section">
+    <section class="card hidden" id="findings-section" data-page="findings">
       <h2>🔎 Findings</h2>
       <ul id="findings-list" class="log-list"></ul>
     </section>
 
+    <!-- ── SETTINGS: account, theme is in the header, passkeys below ──── -->
+    <section class="card hidden" id="settings-section" data-page="settings">
+      <h2>⚙️ Settings</h2>
+      <div class="field">
+        <label>Signed in as</label>
+        <span id="role-badge" class="badge owner hidden"></span>
+      </div>
+      <div class="field">
+        <label>Display / view name</label>
+        <p class="sub">Not supported yet in this build — the username is the
+          account's identity everywhere (findings authorship, sessions,
+          passkeys), so renaming it needs a small backend change. Ask if
+          you'd like that added.</p>
+      </div>
+      <button id="logout-btn" class="ghost hidden" style="width:100%">⎋ Sign out</button>
+    </section>
+
     <!-- ── SECURITY (passkeys) ──────────────────────────────────────── -->
-    <section class="card hidden" id="security-section">
-      <h2>🔐 Security — passkeys</h2>
+    <section class="card hidden" id="security-section" data-page="settings">
+      <h2>🔐 Two-factor — passkeys</h2>
       <p class="sub">Add a passkey (Face ID, Touch ID, Windows Hello, a hardware
         key) as a second factor for your account. Once you have at least one,
         signing in with your password will also ask for it. Requires HTTPS —
