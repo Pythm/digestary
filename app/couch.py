@@ -106,12 +106,20 @@ class Couch:
             payload["sort"] = sort
         r = requests.post(self._path(db, sub="_find"), auth=self.auth, json=payload, timeout=15)
         if r.status_code != 200:
-            # fall back to a full scan (e.g. no index yet on a fresh db)
-            r2 = requests.get(self._path(db), auth=self.auth,
+            # Fall back to a full scan (e.g. no index yet for this sort/selector).
+            # NOTE: must hit _all_docs, not the bare db root — a GET on the db
+            # root returns db metadata (doc_count etc.), not a `rows` list of
+            # documents, so this used to silently return [] on every fallback.
+            r2 = requests.get(self._path(db, sub="_all_docs"), auth=self.auth,
                                params={"include_docs": True, "limit": limit}, timeout=15)
             if r2.status_code != 200:
                 return []
-            return [row["doc"] for row in r2.json().get("rows", [])]
+            docs = [row["doc"] for row in r2.json().get("rows", []) if row.get("doc")]
+            if sort:
+                for s in reversed(sort):
+                    ((field, direction),) = s.items()
+                    docs.sort(key=lambda d: d.get(field, ""), reverse=(direction == "desc"))
+            return docs[:limit]
         return r.json().get("docs", [])
 
     def window(self, db: str, field: str, frm: Optional[str], to: Optional[str],

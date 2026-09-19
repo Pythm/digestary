@@ -31,6 +31,7 @@ EVENT_TIME_FIELDS = {
     "health": "event_at",
     "bathroom_events": "event_at",
     "notes": "event_at",
+    "findings": "created_at",
 }
 
 

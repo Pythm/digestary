@@ -1,305 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Digestary</title>
+<meta name="theme-color" content="#14130f">
 <link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
 
+<!-- ── LOGIN GATE ─────────────────────────────────────────────────────── -->
 <div id="login-gate" class="login-gate hidden">
   <div class="card login-card">
-    <h2>🍽️ Digestary</h2>
-    <p class="sub" id="login-sub">Sign in to your journal.</p>
-    <div class="field">
-      <label for="login-username">Username</label>
-      <input id="login-username" type="text" autocomplete="username">
+    <h1>Digestary</h1>
+    <p class="sub" id="login-sub">A private diet &amp; symptoms journal.</p>
+    <form id="login-form" autocomplete="on">
+      <div class="field">
+        <label for="login-username">Username</label>
+        <input id="login-username" name="username" type="text" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="login-password">Password</label>
+        <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <button id="login-submit" type="submit" style="width:100%">Sign in</button>
+    </form>
+    <div id="passkey-login-wrap" class="hidden" style="margin-top:12px">
+      <button id="passkey-login-btn" class="ghost" style="width:100%" type="button">Continue with passkey</button>
     </div>
-    <div class="field">
-      <label for="login-password">Password</label>
-      <input id="login-password" type="password" autocomplete="current-password">
-    </div>
-    <button id="login-submit" style="width:100%">Sign in</button>
-    <p class="sub" id="login-error" style="color:var(--danger)"></p>
+    <p class="sub text-danger" id="login-error" role="alert"></p>
   </div>
 </div>
 
+<!-- ── APP SHELL ──────────────────────────────────────────────────────── -->
 <div id="app" class="hidden">
   <header class="app-header">
-    <button id="menu-btn" class="icon-btn" aria-label="Open menu">☰</button>
     <div class="header-title">
-      <h1>🍽️ Digestary</h1>
+      <svg class="brand-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+        <path d="M12 3c-2.5 2-4 5-4 8a4 4 0 0 0 8 0c0-3-1.5-6-4-8Z"/>
+        <path d="M12 13v8"/>
+      </svg>
+      <h1 id="page-heading">Today</h1>
     </div>
-    <button id="theme-btn" class="icon-btn" title="Toggle light / dark theme">🌓</button>
+    <button id="theme-btn" class="icon-btn" aria-label="Toggle light and dark theme" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+        <circle cx="12" cy="12" r="4.5"/>
+        <path d="M12 2.5v2M12 19.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2.5 12h2M19.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/>
+      </svg>
+    </button>
   </header>
 
-  <div id="sidebar-backdrop" class="sidebar-backdrop hidden"></div>
-  <nav id="sidebar" class="sidebar">
-    <div class="sidebar-head">
-      <h2>🍽️ Digestary</h2>
-      <button id="sidebar-close" class="icon-btn" aria-label="Close menu">✕</button>
-    </div>
-    <button class="nav-item active" data-target="home">🏠 Home</button>
-    <button class="nav-item" data-target="checkin">🩺 Daily Check-in</button>
-    <button class="nav-item" data-target="timeline">📆 Timeline</button>
-    <button class="nav-item" data-target="findings">🔎 Findings</button>
-    <button class="nav-item" data-target="holiday">🗓️ Holiday</button>
-    <button class="nav-item" data-target="settings">⚙️ Settings</button>
+  <nav id="tabbar" class="tabbar" aria-label="Main navigation">
+    <button class="tab-item active" data-target="today" aria-current="page" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 12h16M4 6h16M4 18h10"/></svg>
+      <span>Today</span>
+    </button>
+    <button class="tab-item" data-target="timeline" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>
+      <span>Timeline</span>
+    </button>
+    <button class="tab-item" data-target="insights" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <span>Insights</span>
+    </button>
+    <button class="tab-item" data-target="settings" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+      <span>Settings</span>
+    </button>
   </nav>
 
   <main>
-    <!-- ── HOME: diet, bathroom events, notes ──────────────────────────── -->
-    <!-- ── DIET ─────────────────────────────────────────────────────── -->
-    <section class="card" id="diet-section" data-page="home">
-      <h2>🍽️ Diet — what did you eat?</h2>
-      <div class="field">
-        <label for="food-input">Type a food (your own words)</label>
-        <input id="food-input" type="text" placeholder="e.g. brød">
-      </div>
-      <div id="food-list" class="typeahead-list"></div>
+    <!-- ══════════════════════ TODAY ══════════════════════ -->
+    <section class="page active" id="page-today" data-page="today">
 
-      <h3>Building this meal</h3>
-      <ul id="meal-draft-list" class="draft-list"></ul>
-
-      <div class="row">
+      <!-- DIET -->
+      <div class="card" id="diet-section">
+        <h2>What did you eat?</h2>
         <div class="field">
-          <label for="intake-where">Who prepared it</label>
-          <select id="intake-where">
-            <option value="home_prepared">Home-prepared</option>
-            <option value="out_prepared">Prepared elsewhere (restaurant / school / catering…)</option>
-          </select>
+          <label for="food-input">Type a food, in your own words</label>
+          <input id="food-input" type="text" placeholder="e.g. bread" autocomplete="off">
         </div>
-        <div class="field" id="where-name-field" hidden>
-          <label for="intake-where-name">Place name</label>
-          <input id="intake-where-name" type="text" placeholder="e.g. Trattoria Roma">
+        <div id="food-list" class="typeahead-list" role="listbox" aria-label="Food suggestions"></div>
+
+        <div id="meal-draft-wrap" class="hidden">
+          <h3>This meal so far</h3>
+          <ul id="meal-draft-list" class="draft-list"></ul>
+
+          <div class="row">
+            <div class="field">
+              <label for="intake-where">Who prepared it</label>
+              <select id="intake-where">
+                <option value="home_prepared">Home-prepared</option>
+                <option value="out_prepared">Prepared elsewhere</option>
+              </select>
+            </div>
+            <div class="field hidden" id="where-name-field">
+              <label for="intake-where-name">Place name</label>
+              <input id="intake-where-name" type="text" placeholder="e.g. Trattoria Roma">
+            </div>
+          </div>
+          <div class="field">
+            <label for="intake-consumed-at">When (editable: now, earlier, or later)</label>
+            <input id="intake-consumed-at" type="datetime-local">
+          </div>
+          <div class="field">
+            <label for="intake-notes">Notes (optional)</label>
+            <textarea id="intake-notes"></textarea>
+          </div>
+          <div class="row">
+            <button id="save-intake">Save meal</button>
+            <button id="clear-intake" class="ghost" type="button">Clear</button>
+          </div>
+        </div>
+
+        <h3>Logged today</h3>
+        <ul id="intake-log-list" class="log-list"></ul>
+        <p class="sub hidden" id="intake-empty">Nothing logged yet today.</p>
+      </div>
+
+      <!-- BATHROOM EVENTS -->
+      <div class="card" id="bathroom-section">
+        <h2>Bathroom events</h2>
+        <div class="field">
+          <label for="bathroom-input">Type a kind, in your own words</label>
+          <input id="bathroom-input" type="text" placeholder="e.g. pee" autocomplete="off">
+        </div>
+        <div id="bathroom-list" class="typeahead-list" role="listbox" aria-label="Bathroom event kinds"></div>
+        <p class="sub">Selected: <strong id="bathroom-selected">none</strong></p>
+        <div class="field">
+          <label for="be-event-at">When it happened</label>
+          <input id="be-event-at" type="datetime-local">
+        </div>
+        <div class="field">
+          <label for="be-notes">Note (optional)</label>
+          <input id="be-notes" type="text">
+        </div>
+        <div class="field">
+          <label for="be-photo">Photo (optional — jpg, png, or webp, up to 5&nbsp;MB)</label>
+          <input id="be-photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp">
+        </div>
+        <button id="log-be" style="width:100%">Log event</button>
+
+        <h3>Logged today</h3>
+        <ul id="bathroom-log-list" class="log-list"></ul>
+        <p class="sub hidden" id="bathroom-empty">Nothing logged yet today.</p>
+      </div>
+
+      <!-- NOTES -->
+      <div class="card" id="notes-section">
+        <h2>Notes</h2>
+        <div class="field">
+          <label for="note-input">Anything else worth remembering</label>
+          <textarea id="note-input" placeholder="e.g. started a new supplement"></textarea>
+        </div>
+        <div class="field">
+          <label for="note-event-at">When it refers to</label>
+          <input id="note-event-at" type="datetime-local">
+        </div>
+        <button id="add-note" style="width:100%">Add note</button>
+      </div>
+    </section>
+
+    <!-- ══════════════════════ TIMELINE ══════════════════════ -->
+    <section class="page" id="page-timeline" data-page="timeline">
+      <div class="card">
+        <h2>Timeline</h2>
+        <p class="sub">Everything in the order it actually happened, from the last 14 days.</p>
+        <div id="holiday-bands"></div>
+        <div id="timeline-list"></div>
+        <div id="timeline-empty" class="empty-state hidden">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>
+          <p>Nothing logged in this window yet.</p>
         </div>
       </div>
-      <div class="field">
-        <label for="intake-consumed-at">When consumed (editable — now / past / future)</label>
-        <input id="intake-consumed-at" type="datetime-local">
-      </div>
-      <div class="field">
-        <label for="intake-notes">Notes</label>
-        <textarea id="intake-notes" placeholder="optional"></textarea>
-      </div>
-      <div class="row">
-        <button id="save-intake">💾 Save meal</button>
-        <button id="clear-intake" class="ghost">Clear</button>
+
+      <div class="card">
+        <h2>Daily check-in</h2>
+        <div class="field">
+          <label for="routine-event-at">Day</label>
+          <input id="routine-event-at" type="datetime-local">
+        </div>
+
+        <h3>Temperature</h3>
+        <div id="temp-display" class="temp-display">——<span class="unit">°C</span></div>
+        <div class="stepper">
+          <button id="temp-minus" class="ghost" type="button" aria-label="Decrease by 0.1 degrees">−</button>
+          <input id="temp-input" type="number" step="0.1" min="30" max="45" placeholder="exact °C">
+          <button id="temp-plus" class="ghost" type="button" aria-label="Increase by 0.1 degrees">+</button>
+        </div>
+
+        <h3>Energy</h3>
+        <label for="energy-range">Energy — <strong id="energy-label">Normal</strong></label>
+        <input id="energy-range" type="range" min="0" max="4" step="1" value="2">
+
+        <h3>Sleep</h3>
+        <div class="field">
+          <label for="sleep-input">Hours slept</label>
+          <input id="sleep-input" type="number" step="0.5" min="0" max="24" placeholder="e.g. 8">
+        </div>
+
+        <h3>Pain</h3>
+        <div class="field">
+          <label for="pain-scale">Overall severity, 0–10 (optional)</label>
+          <input id="pain-scale" type="number" min="0" max="10" placeholder="optional">
+        </div>
+        <div class="body-tabs" role="tablist" aria-label="Body view">
+          <button id="body-tab-front" type="button" role="tab" aria-selected="true">Front</button>
+          <button id="body-tab-back" class="ghost" type="button" role="tab" aria-selected="false">Back</button>
+        </div>
+        <div class="body-map-wrap">
+          <svg id="body-front" class="body-map" viewBox="0 0 200 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Front of body, tap a region to mark pain">
+            <circle class="pain-region" data-region="head" cx="100" cy="28" r="22"/>
+            <rect class="pain-region" data-region="neck" x="88" y="48" width="24" height="14" rx="4"/>
+            <rect class="pain-region" data-region="shoulder_left" x="48" y="62" width="30" height="18" rx="6"/>
+            <rect class="pain-region" data-region="shoulder_right" x="122" y="62" width="30" height="18" rx="6"/>
+            <rect class="pain-region" data-region="chest" x="70" y="80" width="60" height="38" rx="8"/>
+            <rect class="pain-region" data-region="abdomen_upper_left" x="70" y="120" width="30" height="30"/>
+            <rect class="pain-region" data-region="abdomen_upper_right" x="100" y="120" width="30" height="30"/>
+            <rect class="pain-region" data-region="abdomen_lower_left" x="70" y="150" width="30" height="30"/>
+            <rect class="pain-region" data-region="abdomen_lower_right" x="100" y="150" width="30" height="30"/>
+            <rect class="pain-region" data-region="hip_left" x="68" y="180" width="32" height="20" rx="6"/>
+            <rect class="pain-region" data-region="hip_right" x="100" y="180" width="32" height="20" rx="6"/>
+            <rect class="pain-region" data-region="arm_left" x="28" y="80" width="18" height="92" rx="8"/>
+            <rect class="pain-region" data-region="arm_right" x="154" y="80" width="18" height="92" rx="8"/>
+            <ellipse class="pain-region" data-region="hand_left" cx="37" cy="182" rx="12" ry="16"/>
+            <ellipse class="pain-region" data-region="hand_right" cx="163" cy="182" rx="12" ry="16"/>
+            <rect class="pain-region" data-region="leg_left" x="72" y="200" width="24" height="110" rx="8"/>
+            <rect class="pain-region" data-region="leg_right" x="104" y="200" width="24" height="110" rx="8"/>
+            <ellipse class="pain-region" data-region="foot_left" cx="84" cy="320" rx="16" ry="10"/>
+            <ellipse class="pain-region" data-region="foot_right" cx="116" cy="320" rx="16" ry="10"/>
+          </svg>
+          <svg id="body-back" class="body-map hidden" viewBox="0 0 200 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Back of body, tap a region to mark pain">
+            <circle class="pain-region" data-region="head" cx="100" cy="28" r="22"/>
+            <rect class="pain-region" data-region="neck" x="88" y="48" width="24" height="14" rx="4"/>
+            <rect class="pain-region" data-region="shoulder_left" x="48" y="62" width="30" height="18" rx="6"/>
+            <rect class="pain-region" data-region="shoulder_right" x="122" y="62" width="30" height="18" rx="6"/>
+            <rect class="pain-region" data-region="back_upper" x="70" y="80" width="60" height="34"/>
+            <rect class="pain-region" data-region="back_mid" x="70" y="114" width="60" height="34"/>
+            <rect class="pain-region" data-region="back_lower" x="70" y="148" width="60" height="32"/>
+            <rect class="pain-region" data-region="hip_left" x="68" y="180" width="32" height="20" rx="6"/>
+            <rect class="pain-region" data-region="hip_right" x="100" y="180" width="32" height="20" rx="6"/>
+            <rect class="pain-region" data-region="arm_left" x="28" y="80" width="18" height="92" rx="8"/>
+            <rect class="pain-region" data-region="arm_right" x="154" y="80" width="18" height="92" rx="8"/>
+            <ellipse class="pain-region" data-region="hand_left" cx="37" cy="182" rx="12" ry="16"/>
+            <ellipse class="pain-region" data-region="hand_right" cx="163" cy="182" rx="12" ry="16"/>
+            <rect class="pain-region" data-region="leg_left" x="72" y="200" width="24" height="110" rx="8"/>
+            <rect class="pain-region" data-region="leg_right" x="104" y="200" width="24" height="110" rx="8"/>
+            <ellipse class="pain-region" data-region="foot_left" cx="84" cy="320" rx="16" ry="10"/>
+            <ellipse class="pain-region" data-region="foot_right" cx="116" cy="320" rx="16" ry="10"/>
+          </svg>
+        </div>
+        <div class="pain-legend">
+          <span><i class="mild"></i>mild</span>
+          <span><i class="moderate"></i>moderate</span>
+          <span><i class="severe"></i>severe</span>
+          <span>tap to cycle, tap again to clear</span>
+        </div>
+
+        <h3>Symptoms</h3>
+        <div class="field">
+          <label for="symptom-input">Type a symptom, in your own words</label>
+          <input id="symptom-input" type="text" placeholder="e.g. stomach ache" autocomplete="off">
+        </div>
+        <div id="symptom-list" class="typeahead-list" role="listbox" aria-label="Symptom suggestions"></div>
+        <div id="symptom-selected" class="symptom-selected"></div>
+
+        <div class="field" style="margin-top:12px">
+          <label for="routine-notes">Notes (optional)</label>
+          <textarea id="routine-notes"></textarea>
+        </div>
+        <button id="save-routine" style="width:100%">Save today's check-in</button>
       </div>
 
-      <h3>Logged for this period</h3>
-      <ul id="intake-log-list" class="log-list"></ul>
+      <div class="card">
+        <h2>Holidays</h2>
+        <p class="sub">A date range shows as a band on the timeline above.</p>
+        <div class="row">
+          <div class="field"><label for="holiday-start">From</label><input id="holiday-start" type="date"></div>
+          <div class="field"><label for="holiday-stop">To</label><input id="holiday-stop" type="date"></div>
+        </div>
+        <div class="row">
+          <div class="field"><label for="holiday-location">Location</label><input id="holiday-location" type="text" placeholder="e.g. Rome, Italy"></div>
+          <div class="field"><label for="holiday-name">Name (optional)</label><input id="holiday-name" type="text" placeholder="e.g. Rome trip"></div>
+        </div>
+        <button id="add-holiday">Add holiday</button>
+        <ul id="holiday-list" class="log-list" style="margin-top:12px"></ul>
+      </div>
     </section>
 
-    <!-- ── CALENDAR / HOLIDAYS ──────────────────────────────────────── -->
-    <section class="card hidden" id="holidays-section" data-page="holiday">
-      <h2>🗓️ Holiday</h2>
-      <div class="row">
-        <div class="field"><label for="holiday-start">From</label><input id="holiday-start" type="date"></div>
-        <div class="field"><label for="holiday-stop">To</label><input id="holiday-stop" type="date"></div>
+    <!-- ══════════════════════ INSIGHTS (ask + findings) ══════════════════════ -->
+    <section class="page" id="page-insights" data-page="insights">
+      <div class="card">
+        <h2>Ask</h2>
+        <p class="sub">Always returns the relevant rows for the window; no server-side AI. Connect an MCP client (Claude Code, Hermes, …) for a written answer, live, against this same data.</p>
+        <div class="field">
+          <label for="ask-question">Question</label>
+          <input id="ask-question" type="text" placeholder="e.g. which foods show up before my stomach pain?">
+        </div>
+        <div class="row">
+          <div class="field"><label for="ask-from">From</label><input id="ask-from" type="date"></div>
+          <div class="field"><label for="ask-to">To</label><input id="ask-to" type="date"></div>
+        </div>
+        <div class="row">
+          <button id="ask-btn">Ask</button>
+          <button id="ask-save-btn" class="ghost" type="button">Ask &amp; save to findings</button>
+        </div>
+        <pre id="ask-result" class="ask-context hidden" style="margin-top:12px"></pre>
       </div>
-      <div class="row">
-        <div class="field"><label for="holiday-location">Location</label><input id="holiday-location" type="text" placeholder="e.g. Rome, Italy"></div>
-        <div class="field"><label for="holiday-name">Name (optional)</label><input id="holiday-name" type="text" placeholder="e.g. Rome trip"></div>
+
+      <div class="card">
+        <h2>Findings</h2>
+        <ul id="findings-list" class="log-list"></ul>
+        <p class="sub hidden" id="findings-empty">No saved findings yet.</p>
       </div>
-      <button id="add-holiday">➕ Add holiday</button>
-      <ul id="holiday-list" class="log-list" style="margin-top:12px"></ul>
     </section>
 
-    <!-- ── DAILY ROUTINE ────────────────────────────────────────────── -->
-    <section class="card hidden" id="routine-section" data-page="checkin">
-      <h2>🩺 Daily Check-in</h2>
-      <div class="field">
-        <label for="routine-event-at">Day</label>
-        <input id="routine-event-at" type="datetime-local">
+    <!-- ══════════════════════ SETTINGS ══════════════════════ -->
+    <section class="page" id="page-settings" data-page="settings">
+      <div class="card">
+        <h2>Account</h2>
+        <div class="field">
+          <label>Signed in as</label>
+          <span id="role-badge" class="badge owner hidden"></span>
+        </div>
+        <button id="logout-btn" class="ghost hidden" style="width:100%">Sign out</button>
       </div>
 
-      <h3>Temperature</h3>
-      <div id="temp-display" class="temp-display">——<span class="unit">°C</span></div>
-      <div class="stepper">
-        <button id="temp-minus" class="ghost" aria-label="minus 0.1">−</button>
-        <input id="temp-input" type="number" step="0.1" min="30" max="45" placeholder="type exact °C">
-        <button id="temp-plus" class="ghost" aria-label="plus 0.1">+</button>
+      <div class="card hidden" id="security-section">
+        <h2>Two-factor — passkeys</h2>
+        <p class="sub">Add a passkey (Face ID, Touch ID, Windows Hello, or a hardware key) as a second factor. Requires HTTPS: see the README.</p>
+        <ul id="passkey-list" class="log-list"></ul>
+        <button id="add-passkey-btn">Add a passkey</button>
       </div>
 
-      <h3>Energy</h3>
-      <label for="energy-range">Energy: <strong id="energy-label">Normal</strong></label>
-      <input id="energy-range" type="range" min="0" max="4" step="1" value="2" style="width:100%">
-
-      <h3>Sleep</h3>
-      <div class="field"><label for="sleep-input">Hours slept</label><input id="sleep-input" type="number" step="0.5" min="0" max="24" placeholder="e.g. 8"></div>
-
-      <h3>Pain</h3>
-      <div class="field">
-        <label for="pain-scale">Overall severity 0–10 (optional)</label>
-        <input id="pain-scale" type="number" min="0" max="10" placeholder="optional">
+      <div class="card">
+        <h2>About</h2>
+        <p class="sub">Digestary is a personal tracking and reflection tool. It is not medical advice and does not diagnose anything.</p>
       </div>
-      <div class="body-tabs">
-        <button id="body-tab-front" class="active">Front</button>
-        <button id="body-tab-back" class="ghost">Back</button>
-      </div>
-      <div class="body-map-wrap">
-        <svg id="body-front" class="body-map" viewBox="0 0 200 340" xmlns="http://www.w3.org/2000/svg">
-          <circle class="pain-region" data-region="head" cx="100" cy="28" r="22"/>
-          <rect class="pain-region" data-region="neck" x="88" y="48" width="24" height="14" rx="4"/>
-          <rect class="pain-region" data-region="shoulder_left" x="48" y="62" width="30" height="18" rx="6"/>
-          <rect class="pain-region" data-region="shoulder_right" x="122" y="62" width="30" height="18" rx="6"/>
-          <rect class="pain-region" data-region="chest" x="70" y="80" width="60" height="38" rx="8"/>
-          <rect class="pain-region" data-region="abdomen_upper_left" x="70" y="120" width="30" height="30"/>
-          <rect class="pain-region" data-region="abdomen_upper_right" x="100" y="120" width="30" height="30"/>
-          <rect class="pain-region" data-region="abdomen_lower_left" x="70" y="150" width="30" height="30"/>
-          <rect class="pain-region" data-region="abdomen_lower_right" x="100" y="150" width="30" height="30"/>
-          <rect class="pain-region" data-region="hip_left" x="68" y="180" width="32" height="20" rx="6"/>
-          <rect class="pain-region" data-region="hip_right" x="100" y="180" width="32" height="20" rx="6"/>
-          <rect class="pain-region" data-region="arm_left" x="28" y="80" width="18" height="92" rx="8"/>
-          <rect class="pain-region" data-region="arm_right" x="154" y="80" width="18" height="92" rx="8"/>
-          <ellipse class="pain-region" data-region="hand_left" cx="37" cy="182" rx="12" ry="16"/>
-          <ellipse class="pain-region" data-region="hand_right" cx="163" cy="182" rx="12" ry="16"/>
-          <rect class="pain-region" data-region="leg_left" x="72" y="200" width="24" height="110" rx="8"/>
-          <rect class="pain-region" data-region="leg_right" x="104" y="200" width="24" height="110" rx="8"/>
-          <ellipse class="pain-region" data-region="foot_left" cx="84" cy="320" rx="16" ry="10"/>
-          <ellipse class="pain-region" data-region="foot_right" cx="116" cy="320" rx="16" ry="10"/>
-        </svg>
-        <svg id="body-back" class="body-map hidden" viewBox="0 0 200 340" xmlns="http://www.w3.org/2000/svg">
-          <circle class="pain-region" data-region="head" cx="100" cy="28" r="22"/>
-          <rect class="pain-region" data-region="neck" x="88" y="48" width="24" height="14" rx="4"/>
-          <rect class="pain-region" data-region="shoulder_left" x="48" y="62" width="30" height="18" rx="6"/>
-          <rect class="pain-region" data-region="shoulder_right" x="122" y="62" width="30" height="18" rx="6"/>
-          <rect class="pain-region" data-region="back_upper" x="70" y="80" width="60" height="34"/>
-          <rect class="pain-region" data-region="back_mid" x="70" y="114" width="60" height="34"/>
-          <rect class="pain-region" data-region="back_lower" x="70" y="148" width="60" height="32"/>
-          <rect class="pain-region" data-region="hip_left" x="68" y="180" width="32" height="20" rx="6"/>
-          <rect class="pain-region" data-region="hip_right" x="100" y="180" width="32" height="20" rx="6"/>
-          <rect class="pain-region" data-region="arm_left" x="28" y="80" width="18" height="92" rx="8"/>
-          <rect class="pain-region" data-region="arm_right" x="154" y="80" width="18" height="92" rx="8"/>
-          <ellipse class="pain-region" data-region="hand_left" cx="37" cy="182" rx="12" ry="16"/>
-          <ellipse class="pain-region" data-region="hand_right" cx="163" cy="182" rx="12" ry="16"/>
-          <rect class="pain-region" data-region="leg_left" x="72" y="200" width="24" height="110" rx="8"/>
-          <rect class="pain-region" data-region="leg_right" x="104" y="200" width="24" height="110" rx="8"/>
-          <ellipse class="pain-region" data-region="foot_left" cx="84" cy="320" rx="16" ry="10"/>
-          <ellipse class="pain-region" data-region="foot_right" cx="116" cy="320" rx="16" ry="10"/>
-        </svg>
-      </div>
-      <div class="pain-legend">
-        <span><i class="yellow"></i>mild</span>
-        <span><i class="orange"></i>moderate</span>
-        <span><i class="red"></i>severe</span>
-        <span>(tap a region to cycle, tap again to clear)</span>
-      </div>
-
-      <h3>Symptoms</h3>
-      <div class="field"><label for="symptom-input">Type a symptom (your own words)</label><input id="symptom-input" type="text" placeholder="e.g. magesmerter"></div>
-      <div id="symptom-list" class="typeahead-list"></div>
-      <div id="symptom-selected" class="symptom-selected"></div>
-
-      <div class="field" style="margin-top:12px">
-        <label for="routine-notes">Notes</label>
-        <textarea id="routine-notes" placeholder="e.g. felt heavy in the afternoon"></textarea>
-      </div>
-      <button id="save-routine" style="width:100%">💾 Save today's routine</button>
-    </section>
-
-    <!-- ── BATHROOM EVENTS ──────────────────────────────────────────── -->
-    <section class="card" id="bathroom-section" data-page="home">
-      <h2>🚻 Bathroom events</h2>
-      <div class="field"><label for="bathroom-input">Type a kind (your own words)</label><input id="bathroom-input" type="text" placeholder="e.g. pee"></div>
-      <div id="bathroom-list" class="typeahead-list"></div>
-      <div class="field"><label>Selected: <strong id="bathroom-selected">none</strong></label></div>
-      <div class="field"><label for="be-event-at">When it happened (editable)</label><input id="be-event-at" type="datetime-local"></div>
-      <div class="field"><label for="be-notes">Note</label><input id="be-notes" type="text" placeholder="optional"></div>
-      <div class="field"><label for="be-photo">Photo (optional, jpg/png/webp, max 5 MB)</label><input id="be-photo" type="file" accept="image/jpeg,image/png,image/webp"></div>
-      <button id="log-be" style="width:100%">➕ Log bathroom event</button>
-    </section>
-
-    <!-- ── NOTES ────────────────────────────────────────────────────── -->
-    <section class="card" id="notes-section" data-page="home">
-      <h2>📝 Notes</h2>
-      <div class="field"><label for="note-input">Other information</label><textarea id="note-input" placeholder="e.g. started a new supplement"></textarea></div>
-      <div class="field"><label for="note-event-at">When it refers to</label><input id="note-event-at" type="datetime-local"></div>
-      <button id="add-note" style="width:100%">➕ Add note</button>
-    </section>
-
-    <!-- ── TIMELINE ─────────────────────────────────────────────────── -->
-    <section class="card hidden" id="timeline-section" data-page="timeline">
-      <h2>📆 Timeline (last 14 days)</h2>
-      <div id="holiday-bands"></div>
-      <div id="timeline-list"></div>
-    </section>
-
-    <!-- ── ASK ──────────────────────────────────────────────────────── -->
-    <section class="card hidden" id="ask-section" data-page="findings">
-      <h2>💬 Ask</h2>
-      <p class="sub">Always returns the relevant rows for the window — no server-side AI. Connect an MCP client (Claude Code, Hermes, …) for a written answer, live against this same data.</p>
-      <div class="field"><label for="ask-question">Question</label><input id="ask-question" type="text" placeholder="e.g. which foods show up before my stomach pain?"></div>
-      <div class="row">
-        <div class="field"><label for="ask-from">From</label><input id="ask-from" type="date"></div>
-        <div class="field"><label for="ask-to">To</label><input id="ask-to" type="date"></div>
-      </div>
-      <div class="row">
-        <button id="ask-btn">Ask</button>
-        <button id="ask-save-btn" class="ghost">Ask &amp; save to Findings</button>
-      </div>
-      <pre id="ask-result" class="card" style="white-space:pre-wrap; margin-top:12px; display:none; font-size:13px;"></pre>
-    </section>
-
-    <!-- ── FINDINGS ─────────────────────────────────────────────────── -->
-    <section class="card hidden" id="findings-section" data-page="findings">
-      <h2>🔎 Findings</h2>
-      <ul id="findings-list" class="log-list"></ul>
-    </section>
-
-    <!-- ── SETTINGS: account, theme is in the header, passkeys below ──── -->
-    <section class="card hidden" id="settings-section" data-page="settings">
-      <h2>⚙️ Settings</h2>
-      <div class="field">
-        <label>Signed in as</label>
-        <span id="role-badge" class="badge owner hidden"></span>
-      </div>
-      <div class="field">
-        <label>Display / view name</label>
-        <p class="sub">Not supported yet in this build — the username is the
-          account's identity everywhere (findings authorship, sessions,
-          passkeys), so renaming it needs a small backend change. Ask if
-          you'd like that added.</p>
-      </div>
-      <button id="logout-btn" class="ghost hidden" style="width:100%">⎋ Sign out</button>
-    </section>
-
-    <!-- ── SECURITY (passkeys) ──────────────────────────────────────── -->
-    <section class="card hidden" id="security-section" data-page="settings">
-      <h2>🔐 Two-factor — passkeys</h2>
-      <p class="sub">Add a passkey (Face ID, Touch ID, Windows Hello, a hardware
-        key) as a second factor for your account. Once you have at least one,
-        signing in with your password will also ask for it. Requires HTTPS —
-        see the README.</p>
-      <ul id="passkey-list" class="log-list"></ul>
-      <button id="add-passkey-btn">➕ Add a passkey</button>
     </section>
   </main>
 </div>
 
-<!-- ── sub-option popup (recursive: a sub-item can itself have sub-items) ── -->
-<div id="suboption-modal" class="login-gate hidden" style="background:rgba(0,0,0,0.6)">
-  <div class="card login-card">
+<!-- ── sub-option modal ─────────────────────────────────────────────────── -->
+<div id="suboption-modal" class="modal-backdrop hidden">
+  <div class="card modal-card">
     <h3 id="suboption-title">Sub-options</h3>
-    <div id="suboption-input-wrap" class="field">
+    <div class="field">
       <input id="suboption-input" type="text" placeholder="type or pick below">
     </div>
     <div id="suboption-list" class="typeahead-list"></div>
     <div class="row" style="margin-top:14px">
       <button id="suboption-done">Done</button>
-      <button id="suboption-skip" class="ghost">Skip</button>
+      <button id="suboption-skip" class="ghost" type="button">Skip</button>
     </div>
   </div>
 </div>
 
-<!-- ── new-item modal: store a typed food/symptom/kind as leaf or parent ── -->
-<div id="newitem-modal" class="login-gate hidden" style="background:rgba(0,0,0,0.6)">
-  <div class="card login-card">
-    <h3 id="newitem-title">Add "<span id="newitem-name"></span>"</h3>
+<!-- ── new-item modal ───────────────────────────────────────────────────── -->
+<div id="newitem-modal" class="modal-backdrop hidden">
+  <div class="card modal-card">
+    <h3>Add "<span id="newitem-name"></span>"</h3>
     <p class="sub" id="newitem-hint">This is new — how should it be stored?</p>
     <div class="row">
       <button id="newitem-leaf">Store as a plain item</button>
-      <button id="newitem-parent" class="ghost">Register with sub-options</button>
+      <button id="newitem-parent" class="ghost" type="button">Register with sub-options</button>
     </div>
-    <button id="newitem-cancel" class="ghost" style="width:100%; margin-top:10px">Cancel</button>
+    <button id="newitem-cancel" class="ghost" type="button" style="width:100%; margin-top:10px">Cancel</button>
   </div>
 </div>
 
-<div id="toast-host" class="toast-host"></div>
+<div id="toast-host" class="toast-host" aria-live="polite"></div>
 
 <script src="app.js"></script>
+</body>
+</html>
