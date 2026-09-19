@@ -167,16 +167,30 @@ textarea:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 
 /* desktop: left rail instead of bottom bar */
 @media (min-width: 900px) {
-  body { padding-bottom: 0; display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+  body { padding-bottom: 0; }
+  #app { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
   .app-header { grid-column: 2; }
   .tabbar {
-    position: static; grid-row: 1 / -1; flex-direction: column; height: auto; width: 220px;
+    position: static; grid-row: 1 / -1; flex-direction: column; height: auto; width: 240px;
     border-top: none; border-right: 1px solid var(--border); padding: var(--space-5) 0;
     align-items: stretch;
   }
   .tab-item { flex-direction: row; justify-content: flex-start; gap: var(--space-3); padding: var(--space-3) var(--space-5); }
   .tab-item span { font-size: 15px; }
-  main { grid-column: 2; max-width: none; padding: var(--space-6); }
+  main {
+    grid-column: 2; max-width: none; margin: 0; padding: var(--space-6) var(--space-7);
+  }
+  /* use the extra width instead of stretching single-column forms edge to edge */
+  main > .page > .card { max-width: 760px; }
+  #page-timeline .card, #page-insights .card { max-width: 880px; }
+}
+
+@media (min-width: 1280px) {
+  main > .page.active { display: grid; grid-template-columns: repeat(2, minmax(0, 760px)); gap: var(--space-5); align-content: start; }
+  #page-today #diet-section { grid-column: 1; grid-row: 1 / 3; }
+  #page-today #bathroom-section { grid-column: 2; grid-row: 1; }
+  #page-today #notes-section { grid-column: 2; grid-row: 2; align-self: start; }
+  #page-timeline.page.active, #page-insights.page.active, #page-settings.page.active { display: block; }
 }
 
 /* ---------- cards / fields ---------- */
