@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 
 import requests
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 COUCHDB_URL = os.environ.get("COUCHDB_URL", "http://127.0.0.1:5984").rstrip("/")
 COUCHDB_USER = os.environ.get("COUCHDB_USER", "admin")
@@ -38,7 +39,15 @@ LANGUAGE = os.environ.get("LANGUAGE", "en")
 
 COUCH_AUTH = (COUCHDB_USER, COUCHDB_PASSWORD) if COUCHDB_PASSWORD else None
 
-server = FastMCP("digestary")
+server = FastMCP(
+    "digestary",
+    # This server is reached over a LAN IP (behind X-MCP-Secret, checked on
+    # every request by the ASGI middleware below), not localhost, so
+    # FastMCP's default DNS-rebinding Host-header check — which only
+    # allow-lists localhost/127.0.0.1 — must be disabled or every remote
+    # request 421s before the secret is ever checked.
+    transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+)
 
 
 # ── ISO-8601 handling (see app/couch.py for the long version of why) ────────
