@@ -176,7 +176,7 @@ one time.
 | `bathroom_items` | Every bathroom-event kind you've logged, flat, in your own words. Empty on first start. |
 | `bathroom_events` | One document per event: `event_at`, `kind` (references `bathroom_items`), notes, an optional photo attachment, author. |
 | `notes` | Free-text "other information", each with a single `event_at`. |
-| `findings` | AI correlations and saved Q&A. The only place an LLM is allowed to write (besides an item's `emoji`). |
+| `findings` | AI correlations and saved Q&A. |
 | `users` | Login accounts (`AUTH_MODE=public` only) — username, a salted/hashed password, role. |
 | `passkeys` | Enrolled WebAuthn credentials (optional 2nd factor) — one document per passkey: which user it belongs to, its public key, sign count, nickname. See "Passkeys" below. |
 
@@ -202,16 +202,26 @@ The MCP server (`mcp/mcp_server.py`) exposes these tools:
 | `get_notes(from_date, to_date)` | read | Notes in a window |
 | `get_summary(from_date, to_date)` | read | Aggregated stats — a good first call |
 | `ask(question, from_date, to_date)` | read | The relevant rows for a window, formatted for a model to reason over |
+| `list_findings` | read | All saved findings / Q&A, newest first |
 | `add_finding(...)` | **write** | Save a correlation or Q&A — gated by `MCP_SECRET` |
 | `update_item(item_id, emoji)` | **write** | Set an item's emoji — **manual**, see below |
 | `add_item` / `add_symptom_item` / `add_bathroom_item` | **write** | Add one catalog entry, in the language set as `LANGUAGE` — **manual**, see below |
-| `list_findings` | read | All saved findings / Q&A, newest first |
+| `add_item_link(child, parent)` | **write** | Suggest `child` as a one-tap option when `parent` is selected (e.g. *leverpostei* → *brød*) — **manual**, see below |
+| `add_intake(food_names, consumed_at, where, where_name, notes)` | **write** | Log a meal from natural language — one line per food, auto-creates unmatched food names as new items |
+| `add_bathroom_event(kind, event_at, notes)` | **write** | Log a bathroom event — auto-creates an unmatched `kind` as a new bathroom item |
+| `add_health(event_at, temperature_celsius, energy, sleep_hours, symptom_names, pain_map, pain_scale, notes)` | **write** | Upsert the day's routine doc (one per calendar day) — auto-creates unmatched symptom names |
+| `add_note(text, event_at)` | **write** | Add a free-text note |
 
-The model has **read access to everything** but **write access only to
-`findings` and item helpers above**. It can never alter your raw diet /
-routine / bathroom data. Without `MCP_SECRET` configured, the server can't
-write at all; over the HTTP transport (port 8090), **every** request —
-reads included — must carry `X-MCP-Secret`.
+The model has **read access to everything**. Write access covers `findings`,
+the catalog helpers above, **and now logging real events** (intake,
+bathroom events, daily routine, notes) so you can describe what happened in
+plain language and have an agent write it — see "Logging events by talking
+to an LLM" below. It still can never delete or silently rename anything: the
+event-logging tools only ever add new documents or upsert the current day's
+routine, and any catalog entry they auto-create is additive, same as
+`add_item`. Without `MCP_SECRET` configured, the server can't write at all;
+over the HTTP transport (port 8090), **every** request — reads included —
+must carry `X-MCP-Secret`.
 
 ### Filling in food emoji, or prefilling a new user's lists (manual, on request)
 
@@ -230,6 +240,35 @@ needed. It's additive and idempotent: it never renames or deletes anything,
 and re-running it only fills in what's still missing. `LANGUAGE` in `.env`
 tells the agent which language to use; the app itself is otherwise
 language-agnostic — whatever you type is exactly what's stored.
+
+### Logging events by talking to an LLM
+
+Because the connected agent can write real events (not just catalog
+entries), you can hand it a plain-language sentence — in any language,
+typos and all — and have it correct the spelling, ask for anything it's
+missing, and write the result:
+
+> "I dag spiste jeg Spagetti ala Capri, og nå bæsjet jeg meg ut"
+
+A well-behaved agent should:
+
+1. **Parse and clean up** the text (fix the spelling, identify a meal and a
+   bathroom event).
+2. **Ask what's missing** rather than guess — this app's core invariant is
+   the *when it happened* time, so at minimum it should ask for (or confirm)
+   the time of the meal and the time of the bathroom event, and can also ask
+   about where the meal was prepared, or the bathroom event's kind/severity.
+3. **Write it** with `add_intake` (one call per meal) and
+   `add_bathroom_event`, then tell you what it logged — including whether it
+   had to auto-create a new food item ("Spagetti ala Capri" not matching
+   anything in `items` yet) or a new bathroom-event kind, so you can correct
+   the name or merge it later if needed.
+
+The same pattern works for `add_health` ("I slept badly and my stomach hurt
+today") and `add_note` ("remind me I tried a new brand of yoghurt today").
+None of this happens automatically — it's always in response to what you
+ask the connected agent to do, and every write is tagged `author: "mcp"` in
+CouchDB so it's distinguishable from anything entered through the UI.
 
 ### Bringing the data to a doctor's visit
 
@@ -397,8 +436,13 @@ path, and restart.
   — reads included — regardless of network. Over stdio (an agent launching
   it as a local subprocess) only the write tools check the secret, since the
   process itself is already local-trusted.
-- An LLM **cannot** modify your raw data — only append to `findings`, and
-  fill in an item's `emoji` / a missing catalog entry, and only when asked.
+- An LLM **cannot delete or silently rename anything**. It can append to
+  `findings`, fill in an item's `emoji` / a missing catalog entry, and — when
+  you ask it to — log real events (meals, bathroom events, daily routine,
+  notes) from natural language; see "Logging events by talking to an LLM"
+  above. Every such write is tagged `author: "mcp"` and, for food/symptom/
+  bathroom names with no existing match, additively creates a new catalog
+  entry rather than guessing an existing one.
 
 ---
 

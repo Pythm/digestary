@@ -16,6 +16,19 @@ Auth: over MCP_TRANSPORT=http every request (reads included) must carry
 to the whole app before any tool runs. Over stdio (an agent launches this as
 a local subprocess) the process itself is already OS-trusted, so only the
 write tools check the secret individually.
+
+Write surface (2026-09-19, deliberate, decided with the user): originally
+model writes were scoped to `findings` + catalog entries only ("LLM reads
+everything, writes only analysis notes"). That was loosened on purpose to
+let an agent log real events from natural language (a user typing "I ate X,
+then Y happened" and having the agent ask for missing details, then write
+it) — `add_intake`, `add_bathroom_event`, `add_health`, `add_note` below.
+Every write is still gated by `require_secret()` exactly like the catalog
+tools, and every doc written this way is tagged `author: "mcp"` so it's
+distinguishable from UI-entered data. The three event-logging tools that
+take a name (food/symptom/bathroom kind) auto-create it in the matching
+catalog if it doesn't already exist, exactly like `add_item` — this was an
+explicit choice over always asking the user to confirm first.
 """
 from __future__ import annotations
 import base64
@@ -412,6 +425,137 @@ def add_item_link(child: str, parent: str) -> dict:
     if existing:
         return existing
     return put_doc("item_links", link_id, {"child": child_id, "parent": parent_id})
+
+
+def _resolve_item_id(db: str, name: str, emoji: str | None = None) -> str:
+    """Shared by the event-logging tools below: resolve `name` to an
+    existing doc _id in `db` if one matches (case-insensitive on the
+    derived id), else auto-create it (same id derivation/add-only
+    semantics as add_item/add_symptom_item/add_bathroom_item) and return
+    the new id."""
+    item_id = name.strip().lower().replace(" ", "_")
+    if get_doc(db, item_id):
+        return item_id
+    extra = {"emoji": emoji} if db == "items" else {}
+    put_doc(db, item_id, {"name": name.strip(), **extra})
+    return item_id
+
+
+@server.tool()
+def add_intake(food_names: list[str], consumed_at: str | None = None,
+                where: str = "home_prepared", where_name: str | None = None,
+                notes: str | None = None) -> dict:
+    """Log a meal: one intake line per food name, sharing one intake_id
+    (same as the UI's multi-select meal entry). `food_names` are matched
+    case-insensitively against existing `items`; any name with no match is
+    auto-added as a new item (like add_item, emoji left blank — fill it
+    in afterwards with update_item if asked). `consumed_at` is when the
+    food was actually eaten (ISO or 'YYYY-MM-DD HH:MM'), defaults to now
+    if omitted — ask the user for it rather than guessing, since ordering
+    in this app is always by when-it-happened, never when-it-was-logged.
+    `where`: 'home_prepared'|'out_prepared'. Returns the created lines plus
+    which food_names were auto-added as new items, so the caller can tell
+    the user."""
+    require_secret()
+    if where not in ("home_prepared", "out_prepared"):
+        raise ValueError("where must be 'home_prepared' or 'out_prepared'")
+    if not food_names:
+        raise ValueError("food_names must not be empty")
+    consumed_iso = normalize_iso(consumed_at) or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    intake_id = f"i-{uuid.uuid4().hex[:12]}"
+    lines = []
+    added_items = []
+    for name in food_names:
+        was_new = not get_doc("items", name.strip().lower().replace(" ", "_"))
+        food_id = _resolve_item_id("items", name)
+        if was_new:
+            added_items.append(name.strip())
+        line_id = f"il-{uuid.uuid4().hex[:12]}"
+        doc = {
+            "intake_id": intake_id, "food_id": food_id, "consumed_at": consumed_iso,
+            "where": where, "where_name": where_name, "notes": notes or "", "author": "mcp",
+        }
+        lines.append(put_doc("intake", line_id, doc))
+    return {"intake_id": intake_id, "consumed_at": consumed_iso, "lines": lines, "added_items": added_items}
+
+
+@server.tool()
+def add_bathroom_event(kind: str, event_at: str | None = None, notes: str | None = None) -> dict:
+    """Log a bathroom event. `kind` is matched case-insensitively against
+    existing `bathroom_items`; if no match it is auto-added as a new kind
+    (like add_bathroom_item) — tell the user if that happened. `event_at`
+    is when it actually happened (ISO or 'YYYY-MM-DD HH:MM'), defaults to
+    now if omitted — ask rather than guess. Photos can only be attached
+    through the app UI, not via MCP."""
+    require_secret()
+    if not kind or not kind.strip():
+        raise ValueError("kind must not be empty")
+    was_new = not get_doc("bathroom_items", kind.strip().lower().replace(" ", "_"))
+    kind_id = _resolve_item_id("bathroom_items", kind)
+    event_iso = normalize_iso(event_at) or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    doc_id = f"b-{uuid.uuid4().hex[:12]}"
+    doc = {"event_at": event_iso, "kind": kind_id, "notes": notes or "", "author": "mcp"}
+    saved = put_doc("bathroom_events", doc_id, doc)
+    return {**saved, "added_bathroom_item": kind.strip() if was_new else None}
+
+
+@server.tool()
+def add_health(event_at: str | None = None, temperature_celsius: float | None = None,
+               energy: int | None = None, sleep_hours: float | None = None,
+               symptom_names: list[str] | None = None,
+               pain_map: dict[str, str] | None = None, pain_scale: int | None = None,
+               notes: str | None = None) -> dict:
+    """Upsert the daily-routine doc for the day of `event_at` (one per
+    calendar day — calling again the same day merges/overwrites the given
+    fields, others are left as they were, same as the app's own upsert).
+    `symptom_names` are matched case-insensitively against
+    `symptom_items`; unmatched ones are auto-added (like add_symptom_item)
+    — tell the user if that happened. `energy`: 0-4. `pain_scale`: 0-10.
+    `pain_map`: {region: 'yellow'|'orange'|'red'}. Only pass fields you
+    actually have — omitted fields are left untouched on an existing day."""
+    require_secret()
+    event_iso = normalize_iso(event_at) or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    date_key = event_iso[:10]
+    doc_id = f"health-{date_key}"
+    existing = get_doc("health", doc_id) or {}
+    if temperature_celsius is not None:
+        existing["temperature_celsius"] = temperature_celsius
+    if energy is not None:
+        existing["energy"] = energy
+    if sleep_hours is not None:
+        existing["sleep_hours"] = sleep_hours
+    if pain_map is not None:
+        existing["pain_map"] = pain_map
+    if pain_scale is not None:
+        existing["pain_scale"] = pain_scale
+    if notes is not None:
+        existing["notes"] = notes
+    added_symptoms = []
+    if symptom_names is not None:
+        sids = []
+        for name in symptom_names:
+            sid = name.strip().lower().replace(" ", "_")
+            if not get_doc("symptom_items", sid):
+                added_symptoms.append(name.strip())
+            sids.append(_resolve_item_id("symptom_items", name))
+        existing["symptoms"] = [{"symptom_id": sid} for sid in sids]
+    existing["event_at"] = event_iso
+    existing.setdefault("author", "mcp")
+    saved = put_doc("health", doc_id, existing)
+    return {**saved, "added_symptom_items": added_symptoms}
+
+
+@server.tool()
+def add_note(text: str, event_at: str | None = None) -> dict:
+    """Add a free-text note. `event_at` is when it happened (ISO or
+    'YYYY-MM-DD HH:MM'), defaults to now if omitted."""
+    require_secret()
+    if not text or not text.strip():
+        raise ValueError("text must not be empty")
+    doc_id = f"n-{uuid.uuid4().hex[:12]}"
+    event_iso = normalize_iso(event_at) or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    doc = {"event_at": event_iso, "text": text.strip(), "author": "mcp"}
+    return put_doc("notes", doc_id, doc)
 
 
 @server.tool()
