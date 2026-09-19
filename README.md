@@ -299,8 +299,8 @@ password. It's per-account and opt-in — an account with no passkey enrolled
 keeps logging in with just its password, exactly as before.
 
 - **Required env vars** (`.env`) — leave both blank to disable the feature
-  entirely (the Security section stays hidden, login stays password-only,
-  no errors anywhere):
+  entirely (the Security card on the Settings page stays hidden, login stays
+  password-only, no errors anywhere):
   - `WEBAUTHN_RP_ID` — the bare domain, e.g. `digestary.example.com`
     (no scheme, no port).
   - `WEBAUTHN_ORIGIN` — the full origin the browser sees, e.g.
@@ -319,8 +319,8 @@ keeps logging in with just its password, exactly as before.
 - Once enrolled, `POST /api/auth/login` with the correct password returns
   `{"mfa_required": true, ...}` instead of a session, and the UI
   transparently prompts for the passkey to finish signing in. Removing all
-  of an account's passkeys (from the Security section) returns it to
-  password-only login.
+  of an account's passkeys (from the Settings page's Security card) returns
+  it to password-only login.
 
 ---
 
