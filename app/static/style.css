@@ -232,6 +232,16 @@ input[type="password"], input[type="file"], select, textarea {
 input[type="date"], input[type="datetime-local"] {
   -webkit-min-logical-width: 0;
 }
+/* Date/datetime pickers only need to show a short fixed-format value —
+   stretching them to the full width of a wide desktop card (a .field with
+   no .row sibling can be 800px+) looks broken even though nothing
+   overflows. Cap them to a sensible reading width once there's room to
+   spare; mobile cards are already narrower than this, so width:100%
+   above still governs there. */
+@media (min-width: 480px) {
+  input[type="date"] { max-width: 200px; }
+  input[type="datetime-local"] { max-width: 260px; }
+}
 textarea { min-height: 80px; resize: vertical; }
 input:focus, select:focus, textarea:focus { border-color: var(--accent); }
 
