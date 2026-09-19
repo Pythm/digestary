@@ -392,6 +392,29 @@ def add_item(name: str, emoji: str | None = None) -> dict:
 
 
 @server.tool()
+def add_item_link(child: str, parent: str) -> dict:
+    """Suggest `child` as an option when `parent` is selected (e.g. child
+    'leverpostei', parent 'brød' -> picking Brød offers Leverpostei as a
+    one-tap add). UI hint only — an intake line always stores a plain
+    food_id, never a link. MANUAL, additive: both items must already exist
+    (via add_item), does nothing if the link already exists, and never
+    modifies/deletes an existing link (use delete via the app API for that).
+    IDs are lowercase/underscored the same way add_item derives them."""
+    require_secret()
+    child_id = child.strip().lower().replace(" ", "_")
+    parent_id = parent.strip().lower().replace(" ", "_")
+    if not get_doc("items", child_id):
+        raise ValueError(f"child item {child_id!r} not found — add it first with add_item")
+    if not get_doc("items", parent_id):
+        raise ValueError(f"parent item {parent_id!r} not found — add it first with add_item")
+    link_id = f"link-{child_id}-{parent_id}"
+    existing = get_doc("item_links", link_id)
+    if existing:
+        return existing
+    return put_doc("item_links", link_id, {"child": child_id, "parent": parent_id})
+
+
+@server.tool()
 def add_symptom_item(name: str) -> dict:
     """Add one symptom item, in the LANGUAGE-registered language. MANUAL,
     additive — same rules as add_item."""
