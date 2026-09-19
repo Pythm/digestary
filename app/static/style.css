@@ -179,7 +179,10 @@ textarea:focus-visible, a:focus-visible, [tabindex]:focus-visible {
     padding: var(--space-5) 0; align-items: stretch;
     overflow-y: auto;
   }
-  .tab-item { flex-direction: row; justify-content: flex-start; gap: var(--space-3); padding: var(--space-3) var(--space-5); }
+  .tab-item {
+    flex: 0 0 auto; flex-direction: row; justify-content: flex-start;
+    gap: var(--space-3); padding: var(--space-3) var(--space-5);
+  }
   .tab-item span { font-size: 15px; }
   .app-header { margin-left: 240px; }
   main {
@@ -233,15 +236,11 @@ input[type="date"], input[type="datetime-local"] {
   -webkit-min-logical-width: 0;
 }
 /* Date/datetime pickers only need to show a short fixed-format value —
-   stretching them to the full width of a wide desktop card (a .field with
-   no .row sibling can be 800px+) looks broken even though nothing
-   overflows. Cap them to a sensible reading width once there's room to
-   spare; mobile cards are already narrower than this, so width:100%
-   above still governs there. */
-@media (min-width: 480px) {
-  input[type="date"] { max-width: 200px; }
-  input[type="datetime-local"] { max-width: 260px; }
-}
+   stretching them to the full width of their container (up to 800px+ on
+   a wide desktop card, but even ~300px on a narrow mobile card looks
+   oversized) never helps legibility. Cap them everywhere. */
+input[type="date"] { max-width: 200px; }
+input[type="datetime-local"] { max-width: 260px; }
 textarea { min-height: 80px; resize: vertical; }
 input:focus, select:focus, textarea:focus { border-color: var(--accent); }
 
