@@ -201,8 +201,10 @@ def get_holidays(from_date: str | None = None, to_date: str | None = None) -> li
 def get_health(from_date: str | None = None, to_date: str | None = None) -> list[dict]:
     """Daily routines in a window (one doc per day). Each: event_at,
     temperature_celsius, energy (0-4), sleep_hours, symptoms
-    ([{symptom_id}] -> symptom_items), pain_map ({region: yellow|orange|red}),
-    pain_scale (0-10, optional), notes."""
+    ([{symptom_id}] -> symptom_items), pain_map ({region: mild|moderate|severe},
+    region keys are the app's body-map ids, e.g. head_frontal, epigastric,
+    abdomen_lower_right, back_lower_left, knee_left — left/right are the
+    person's own sides), pain_scale (0-10, optional), notes."""
     return window("health", "event_at", from_date, to_date)
 
 
@@ -511,7 +513,13 @@ def add_health(event_at: str | None = None, temperature_celsius: float | None = 
     `symptom_names` are matched case-insensitively against
     `symptom_items`; unmatched ones are auto-added (like add_symptom_item)
     — tell the user if that happened. `energy`: 0-4. `pain_scale`: 0-10.
-    `pain_map`: {region: 'yellow'|'orange'|'red'}. Only pass fields you
+    `pain_map`: {region: 'mild'|'moderate'|'severe'} where region is one of
+    the app's body-map ids (head_frontal, head_temporal_left/right,
+    head_vertex, head_occipital, head_face, neck, shoulder_*, chest,
+    epigastric, periumbilical, suprapubic, abdomen_upper_*/abdomen_lower_*,
+    back_upper_*/back_mid_*/back_lower_*, hip_*, arm_upper_*, elbow_*,
+    forearm_*, hand_*, thigh_*, knee_*, calf_*, foot_*; `*` = left|right,
+    the person's own side). Only pass fields you
     actually have — omitted fields are left untouched on an existing day."""
     require_secret()
     event_iso = normalize_iso(event_at) or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")

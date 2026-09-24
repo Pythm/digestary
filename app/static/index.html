@@ -210,52 +210,131 @@
           <button id="body-tab-back" class="ghost" type="button" role="tab" aria-selected="false">Back</button>
         </div>
         <div class="body-map-wrap">
-          <svg id="body-front" class="body-map" viewBox="0 0 200 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Front of body, tap a region to mark pain">
-            <circle class="pain-region" data-region="head" cx="100" cy="28" r="22"/>
-            <rect class="pain-region" data-region="neck" x="88" y="48" width="24" height="14" rx="4"/>
-            <rect class="pain-region" data-region="shoulder_left" x="48" y="62" width="30" height="18" rx="6"/>
-            <rect class="pain-region" data-region="shoulder_right" x="122" y="62" width="30" height="18" rx="6"/>
-            <rect class="pain-region" data-region="chest" x="70" y="80" width="60" height="38" rx="8"/>
-            <rect class="pain-region" data-region="abdomen_upper_left" x="70" y="120" width="30" height="30"/>
-            <rect class="pain-region" data-region="abdomen_upper_right" x="100" y="120" width="30" height="30"/>
-            <rect class="pain-region" data-region="abdomen_lower_left" x="70" y="150" width="30" height="30"/>
-            <rect class="pain-region" data-region="abdomen_lower_right" x="100" y="150" width="30" height="30"/>
-            <rect class="pain-region" data-region="hip_left" x="68" y="180" width="32" height="20" rx="6"/>
-            <rect class="pain-region" data-region="hip_right" x="100" y="180" width="32" height="20" rx="6"/>
-            <rect class="pain-region" data-region="arm_left" x="28" y="80" width="18" height="92" rx="8"/>
-            <rect class="pain-region" data-region="arm_right" x="154" y="80" width="18" height="92" rx="8"/>
-            <ellipse class="pain-region" data-region="hand_left" cx="37" cy="182" rx="12" ry="16"/>
-            <ellipse class="pain-region" data-region="hand_right" cx="163" cy="182" rx="12" ry="16"/>
-            <rect class="pain-region" data-region="leg_left" x="72" y="200" width="24" height="110" rx="8"/>
-            <rect class="pain-region" data-region="leg_right" x="104" y="200" width="24" height="110" rx="8"/>
-            <ellipse class="pain-region" data-region="foot_left" cx="84" cy="320" rx="16" ry="10"/>
-            <ellipse class="pain-region" data-region="foot_right" cx="116" cy="320" rx="16" ry="10"/>
+          <!--
+            Pain body map. Region set follows clinical pain-diagram convention
+            (see README "Pain map regions"): head split frontal / temporal L+R /
+            vertex / occipital / face (ICHD-3 uses unilateral vs bilateral location
+            as a diagnostic feature); abdomen = the four quadrants plus the
+            epigastric, periumbilical and suprapubic midline regions of the
+            nine-region scheme; back = upper / mid / lower x left / right;
+            limbs split at the joints (shoulder, elbow, hip, knee) as in the
+            Nordic Musculoskeletal Questionnaire and the CHOIR body map.
+            Laterality is the PERSON's own left/right, so the front view is
+            mirrored (their right on your left) and the back view is not.
+            The silhouette and landmarks are pointer-events:none; only
+            .pain-region shapes are tappable. pain_map keys = data-region.
+          -->
+          <svg id="body-front" class="body-map" viewBox="22 0 156 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Front of body, tap a region to mark pain">
+            <defs><clipPath id="body-clip-front"><path d="M 86,58 L 86,76 L 66,82 Q 50,86 46,100 L 40,160 L 32,222 L 28,238 Q 26,254 38,257 Q 52,258 56,242 L 58,222 L 60,160 L 64,112 L 66,150 L 62,192 L 64,220 L 68,266 L 72,300 L 74,330 L 70,346 Q 70,356 82,356 L 94,354 Q 97,352 97,344 L 97,300 L 96,270 L 97,214 L 100,206 L 103,214 L 104,270 L 103,300 L 103,344 Q 103,352 106,354 L 118,356 Q 130,356 130,346 L 126,330 L 128,300 L 132,266 L 136,220 L 138,192 L 134,150 L 136,112 L 140,160 L 142,222 L 144,242 Q 148,258 162,257 Q 174,254 172,238 L 168,222 L 160,160 L 154,100 Q 150,86 134,82 L 114,76 L 114,58 Z"/><ellipse cx="100" cy="32" rx="30" ry="30"/></clipPath></defs>
+            <g class="body-outline">
+              <path d="M 86,58 L 86,76 L 66,82 Q 50,86 46,100 L 40,160 L 32,222 L 28,238 Q 26,254 38,257 Q 52,258 56,242 L 58,222 L 60,160 L 64,112 L 66,150 L 62,192 L 64,220 L 68,266 L 72,300 L 74,330 L 70,346 Q 70,356 82,356 L 94,354 Q 97,352 97,344 L 97,300 L 96,270 L 97,214 L 100,206 L 103,214 L 104,270 L 103,300 L 103,344 Q 103,352 106,354 L 118,356 Q 130,356 130,346 L 126,330 L 128,300 L 132,266 L 136,220 L 138,192 L 134,150 L 136,112 L 140,160 L 142,222 L 144,242 Q 148,258 162,257 Q 174,254 172,238 L 168,222 L 160,160 L 154,100 Q 150,86 134,82 L 114,76 L 114,58 Z"/>
+              <ellipse cx="100" cy="32" rx="30" ry="30"/>
+            </g>
+            <g class="body-regions" clip-path="url(#body-clip-front)">
+              <rect x="66" y="0" width="68" height="22" rx="0" class="pain-region" data-region="head_frontal"><title>Forehead (frontal)</title></rect>
+              <rect x="89" y="22" width="22" height="42" rx="0" class="pain-region" data-region="head_face"><title>Face: eyes, sinuses, jaw</title></rect>
+              <rect x="62" y="22" width="27" height="42" rx="0" class="pain-region" data-region="head_temporal_right"><title>Temple (temporal), right</title></rect>
+              <rect x="111" y="22" width="27" height="42" rx="0" class="pain-region" data-region="head_temporal_left"><title>Temple (temporal), left</title></rect>
+              <rect x="82" y="58" width="36" height="22" rx="0" class="pain-region" data-region="neck"><title>Neck</title></rect>
+              <rect x="40" y="78" width="38" height="26" rx="0" class="pain-region" data-region="shoulder_right"><title>Shoulder, right</title></rect>
+              <rect x="122" y="78" width="38" height="26" rx="0" class="pain-region" data-region="shoulder_left"><title>Shoulder, left</title></rect>
+              <rect x="76" y="80" width="48" height="38" rx="0" class="pain-region" data-region="chest"><title>Chest</title></rect>
+              <rect x="60" y="118" width="28" height="34" rx="0" class="pain-region" data-region="abdomen_upper_right"><title>Upper abdomen, right</title></rect>
+              <rect x="112" y="118" width="28" height="34" rx="0" class="pain-region" data-region="abdomen_upper_left"><title>Upper abdomen, left</title></rect>
+              <rect x="88" y="118" width="24" height="24" rx="0" class="pain-region" data-region="epigastric"><title>Upper middle abdomen (epigastric)</title></rect>
+              <rect x="88" y="142" width="24" height="24" rx="0" class="pain-region" data-region="periumbilical"><title>Around the navel (periumbilical)</title></rect>
+              <rect x="60" y="152" width="28" height="40" rx="0" class="pain-region" data-region="abdomen_lower_right"><title>Lower abdomen, right</title></rect>
+              <rect x="112" y="152" width="28" height="40" rx="0" class="pain-region" data-region="abdomen_lower_left"><title>Lower abdomen, left</title></rect>
+              <rect x="88" y="166" width="24" height="26" rx="0" class="pain-region" data-region="suprapubic"><title>Lower middle abdomen (suprapubic)</title></rect>
+              <rect x="54" y="192" width="46" height="22" rx="0" class="pain-region" data-region="hip_right"><title>Hip and pelvis, right</title></rect>
+              <rect x="100" y="192" width="46" height="22" rx="0" class="pain-region" data-region="hip_left"><title>Hip and pelvis, left</title></rect>
+              <rect x="36" y="104" width="30" height="48" rx="0" class="pain-region" data-region="arm_upper_right"><title>Upper arm, right</title></rect>
+              <rect x="134" y="104" width="30" height="48" rx="0" class="pain-region" data-region="arm_upper_left"><title>Upper arm, left</title></rect>
+              <rect x="30" y="152" width="36" height="26" rx="12" class="pain-region" data-region="elbow_right"><title>Elbow, right</title></rect>
+              <rect x="134" y="152" width="36" height="26" rx="12" class="pain-region" data-region="elbow_left"><title>Elbow, left</title></rect>
+              <rect x="26" y="178" width="36" height="44" rx="0" class="pain-region" data-region="forearm_right"><title>Forearm, right</title></rect>
+              <rect x="138" y="178" width="36" height="44" rx="0" class="pain-region" data-region="forearm_left"><title>Forearm, left</title></rect>
+              <rect x="22" y="222" width="42" height="40" rx="14" class="pain-region" data-region="hand_right"><title>Wrist and hand, right</title></rect>
+              <rect x="136" y="222" width="42" height="40" rx="14" class="pain-region" data-region="hand_left"><title>Wrist and hand, left</title></rect>
+              <rect x="58" y="214" width="42" height="50" rx="0" class="pain-region" data-region="thigh_right"><title>Thigh, right</title></rect>
+              <rect x="100" y="214" width="42" height="50" rx="0" class="pain-region" data-region="thigh_left"><title>Thigh, left</title></rect>
+              <rect x="62" y="264" width="38" height="26" rx="12" class="pain-region" data-region="knee_right"><title>Knee, right</title></rect>
+              <rect x="100" y="264" width="38" height="26" rx="12" class="pain-region" data-region="knee_left"><title>Knee, left</title></rect>
+              <rect x="62" y="290" width="38" height="40" rx="0" class="pain-region" data-region="calf_right"><title>Shin and calf, right</title></rect>
+              <rect x="100" y="290" width="38" height="40" rx="0" class="pain-region" data-region="calf_left"><title>Shin and calf, left</title></rect>
+              <rect x="62" y="330" width="38" height="30" rx="10" class="pain-region" data-region="foot_right"><title>Ankle and foot, right</title></rect>
+              <rect x="100" y="330" width="38" height="30" rx="10" class="pain-region" data-region="foot_left"><title>Ankle and foot, left</title></rect>
+            </g>
+            <g class="body-decor">
+              <path d="M 70,28 Q 63,35 70,42 M 130,28 Q 137,35 130,42"/>
+              <circle cx="91" cy="30" r="2.2" class="fill"/>
+              <circle cx="109" cy="30" r="2.2" class="fill"/>
+              <path d="M 100,33 L 97,41 L 103,41"/>
+              <path d="M 93,50 Q 100,55 107,50"/>
+              <path d="M 74,88 Q 90,92 100,90 Q 110,92 126,88"/>
+              <circle cx="100" cy="158" r="1.6" class="fill"/>
+            </g>
+            <g class="body-labels" aria-hidden="true">
+              <text x="31" y="60">R</text>
+              <text x="169" y="60">L</text>
+            </g>
           </svg>
-          <svg id="body-back" class="body-map hidden" viewBox="0 0 200 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Back of body, tap a region to mark pain">
-            <circle class="pain-region" data-region="head" cx="100" cy="28" r="22"/>
-            <rect class="pain-region" data-region="neck" x="88" y="48" width="24" height="14" rx="4"/>
-            <rect class="pain-region" data-region="shoulder_left" x="48" y="62" width="30" height="18" rx="6"/>
-            <rect class="pain-region" data-region="shoulder_right" x="122" y="62" width="30" height="18" rx="6"/>
-            <rect class="pain-region" data-region="back_upper" x="70" y="80" width="60" height="34"/>
-            <rect class="pain-region" data-region="back_mid" x="70" y="114" width="60" height="34"/>
-            <rect class="pain-region" data-region="back_lower" x="70" y="148" width="60" height="32"/>
-            <rect class="pain-region" data-region="hip_left" x="68" y="180" width="32" height="20" rx="6"/>
-            <rect class="pain-region" data-region="hip_right" x="100" y="180" width="32" height="20" rx="6"/>
-            <rect class="pain-region" data-region="arm_left" x="28" y="80" width="18" height="92" rx="8"/>
-            <rect class="pain-region" data-region="arm_right" x="154" y="80" width="18" height="92" rx="8"/>
-            <ellipse class="pain-region" data-region="hand_left" cx="37" cy="182" rx="12" ry="16"/>
-            <ellipse class="pain-region" data-region="hand_right" cx="163" cy="182" rx="12" ry="16"/>
-            <rect class="pain-region" data-region="leg_left" x="72" y="200" width="24" height="110" rx="8"/>
-            <rect class="pain-region" data-region="leg_right" x="104" y="200" width="24" height="110" rx="8"/>
-            <ellipse class="pain-region" data-region="foot_left" cx="84" cy="320" rx="16" ry="10"/>
-            <ellipse class="pain-region" data-region="foot_right" cx="116" cy="320" rx="16" ry="10"/>
+          <svg id="body-back" class="body-map hidden" viewBox="22 0 156 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Back of body, tap a region to mark pain">
+            <defs><clipPath id="body-clip-back"><path d="M 86,58 L 86,76 L 66,82 Q 50,86 46,100 L 40,160 L 32,222 L 28,238 Q 26,254 38,257 Q 52,258 56,242 L 58,222 L 60,160 L 64,112 L 66,150 L 62,192 L 64,220 L 68,266 L 72,300 L 74,330 L 70,346 Q 70,356 82,356 L 94,354 Q 97,352 97,344 L 97,300 L 96,270 L 97,214 L 100,206 L 103,214 L 104,270 L 103,300 L 103,344 Q 103,352 106,354 L 118,356 Q 130,356 130,346 L 126,330 L 128,300 L 132,266 L 136,220 L 138,192 L 134,150 L 136,112 L 140,160 L 142,222 L 144,242 Q 148,258 162,257 Q 174,254 172,238 L 168,222 L 160,160 L 154,100 Q 150,86 134,82 L 114,76 L 114,58 Z"/><ellipse cx="100" cy="32" rx="30" ry="30"/></clipPath></defs>
+            <g class="body-outline">
+              <path d="M 86,58 L 86,76 L 66,82 Q 50,86 46,100 L 40,160 L 32,222 L 28,238 Q 26,254 38,257 Q 52,258 56,242 L 58,222 L 60,160 L 64,112 L 66,150 L 62,192 L 64,220 L 68,266 L 72,300 L 74,330 L 70,346 Q 70,356 82,356 L 94,354 Q 97,352 97,344 L 97,300 L 96,270 L 97,214 L 100,206 L 103,214 L 104,270 L 103,300 L 103,344 Q 103,352 106,354 L 118,356 Q 130,356 130,346 L 126,330 L 128,300 L 132,266 L 136,220 L 138,192 L 134,150 L 136,112 L 140,160 L 142,222 L 144,242 Q 148,258 162,257 Q 174,254 172,238 L 168,222 L 160,160 L 154,100 Q 150,86 134,82 L 114,76 L 114,58 Z"/>
+              <ellipse cx="100" cy="32" rx="30" ry="30"/>
+            </g>
+            <g class="body-regions" clip-path="url(#body-clip-back)">
+              <rect x="66" y="0" width="68" height="22" rx="0" class="pain-region" data-region="head_vertex"><title>Top of head (vertex)</title></rect>
+              <rect x="89" y="22" width="22" height="42" rx="0" class="pain-region" data-region="head_occipital"><title>Back of head (occipital)</title></rect>
+              <rect x="111" y="22" width="27" height="42" rx="0" class="pain-region" data-region="head_temporal_right"><title>Temple (temporal), right</title></rect>
+              <rect x="62" y="22" width="27" height="42" rx="0" class="pain-region" data-region="head_temporal_left"><title>Temple (temporal), left</title></rect>
+              <rect x="82" y="58" width="36" height="22" rx="0" class="pain-region" data-region="neck"><title>Neck</title></rect>
+              <rect x="122" y="78" width="38" height="26" rx="0" class="pain-region" data-region="shoulder_right"><title>Shoulder, right</title></rect>
+              <rect x="40" y="78" width="38" height="26" rx="0" class="pain-region" data-region="shoulder_left"><title>Shoulder, left</title></rect>
+              <rect x="100" y="80" width="40" height="38" rx="0" class="pain-region" data-region="back_upper_right"><title>Upper back, right</title></rect>
+              <rect x="60" y="80" width="40" height="38" rx="0" class="pain-region" data-region="back_upper_left"><title>Upper back, left</title></rect>
+              <rect x="100" y="118" width="40" height="36" rx="0" class="pain-region" data-region="back_mid_right"><title>Mid back, right</title></rect>
+              <rect x="60" y="118" width="40" height="36" rx="0" class="pain-region" data-region="back_mid_left"><title>Mid back, left</title></rect>
+              <rect x="100" y="154" width="40" height="38" rx="0" class="pain-region" data-region="back_lower_right"><title>Lower back, right</title></rect>
+              <rect x="60" y="154" width="40" height="38" rx="0" class="pain-region" data-region="back_lower_left"><title>Lower back, left</title></rect>
+              <rect x="100" y="192" width="46" height="22" rx="0" class="pain-region" data-region="hip_right"><title>Hip and pelvis, right</title></rect>
+              <rect x="54" y="192" width="46" height="22" rx="0" class="pain-region" data-region="hip_left"><title>Hip and pelvis, left</title></rect>
+              <rect x="134" y="104" width="30" height="48" rx="0" class="pain-region" data-region="arm_upper_right"><title>Upper arm, right</title></rect>
+              <rect x="36" y="104" width="30" height="48" rx="0" class="pain-region" data-region="arm_upper_left"><title>Upper arm, left</title></rect>
+              <rect x="134" y="152" width="36" height="26" rx="12" class="pain-region" data-region="elbow_right"><title>Elbow, right</title></rect>
+              <rect x="30" y="152" width="36" height="26" rx="12" class="pain-region" data-region="elbow_left"><title>Elbow, left</title></rect>
+              <rect x="138" y="178" width="36" height="44" rx="0" class="pain-region" data-region="forearm_right"><title>Forearm, right</title></rect>
+              <rect x="26" y="178" width="36" height="44" rx="0" class="pain-region" data-region="forearm_left"><title>Forearm, left</title></rect>
+              <rect x="136" y="222" width="42" height="40" rx="14" class="pain-region" data-region="hand_right"><title>Wrist and hand, right</title></rect>
+              <rect x="22" y="222" width="42" height="40" rx="14" class="pain-region" data-region="hand_left"><title>Wrist and hand, left</title></rect>
+              <rect x="100" y="214" width="42" height="50" rx="0" class="pain-region" data-region="thigh_right"><title>Thigh, right</title></rect>
+              <rect x="58" y="214" width="42" height="50" rx="0" class="pain-region" data-region="thigh_left"><title>Thigh, left</title></rect>
+              <rect x="100" y="264" width="38" height="26" rx="12" class="pain-region" data-region="knee_right"><title>Knee, right</title></rect>
+              <rect x="62" y="264" width="38" height="26" rx="12" class="pain-region" data-region="knee_left"><title>Knee, left</title></rect>
+              <rect x="100" y="290" width="38" height="40" rx="0" class="pain-region" data-region="calf_right"><title>Shin and calf, right</title></rect>
+              <rect x="62" y="290" width="38" height="40" rx="0" class="pain-region" data-region="calf_left"><title>Shin and calf, left</title></rect>
+              <rect x="100" y="330" width="38" height="30" rx="10" class="pain-region" data-region="foot_right"><title>Ankle and foot, right</title></rect>
+              <rect x="62" y="330" width="38" height="30" rx="10" class="pain-region" data-region="foot_left"><title>Ankle and foot, left</title></rect>
+            </g>
+            <g class="body-decor">
+              <path d="M 70,28 Q 63,35 70,42 M 130,28 Q 137,35 130,42"/>
+              <path d="M 76,46 Q 100,56 124,46"/>
+              <path d="M 100,78 L 100,196" class="dash"/>
+              <path d="M 72,94 Q 82,116 92,102 M 128,94 Q 118,116 108,102"/>
+            </g>
+            <g class="body-labels" aria-hidden="true">
+              <text x="31" y="60">L</text>
+              <text x="169" y="60">R</text>
+            </g>
           </svg>
         </div>
         <div class="pain-legend">
           <span><i class="mild"></i>mild</span>
           <span><i class="moderate"></i>moderate</span>
           <span><i class="severe"></i>severe</span>
-          <span>tap to cycle, tap again to clear</span>
+          <span>tap to cycle, tap again to clear · left/right are your own sides</span>
         </div>
 
         <h3>Symptoms</h3>

@@ -589,6 +589,54 @@ function updateEnergyLabel() {
 }
 
 const PAIN_CYCLE = SEVERITY_CYCLE;
+// pain_map keys = data-region ids in index.html (see the comment above the
+// body-map SVGs for the clinical convention they follow). Left/right are
+// the person's own sides. Used for readable timeline text only — the stored
+// key is always the snake_case id.
+const PAIN_REGION_LABELS = {
+  head_frontal: "forehead", head_temporal_left: "left temple", head_temporal_right: "right temple",
+  head_vertex: "top of head", head_occipital: "back of head", head_face: "face",
+  neck: "neck", shoulder_left: "left shoulder", shoulder_right: "right shoulder",
+  chest: "chest", epigastric: "upper middle abdomen", periumbilical: "around the navel",
+  suprapubic: "lower middle abdomen",
+  abdomen_upper_left: "upper left abdomen", abdomen_upper_right: "upper right abdomen",
+  abdomen_lower_left: "lower left abdomen", abdomen_lower_right: "lower right abdomen",
+  back_upper_left: "upper back (left)", back_upper_right: "upper back (right)",
+  back_mid_left: "mid back (left)", back_mid_right: "mid back (right)",
+  back_lower_left: "lower back (left)", back_lower_right: "lower back (right)",
+  hip_left: "left hip", hip_right: "right hip",
+  arm_upper_left: "left upper arm", arm_upper_right: "right upper arm",
+  elbow_left: "left elbow", elbow_right: "right elbow",
+  forearm_left: "left forearm", forearm_right: "right forearm",
+  hand_left: "left hand", hand_right: "right hand",
+  thigh_left: "left thigh", thigh_right: "right thigh",
+  knee_left: "left knee", knee_right: "right knee",
+  calf_left: "left calf", calf_right: "right calf",
+  foot_left: "left foot", foot_right: "right foot",
+};
+// Keys written by the first body map (before the region split). Translated
+// on load so an older day still shows its painted regions; the day is then
+// saved in the new vocabulary the next time it is saved. Keys not listed
+// here (and not on the map) are kept as-is so nothing is silently dropped.
+const LEGACY_PAIN_REGIONS = {
+  head: ["head_frontal"],
+  arm_left: ["arm_upper_left"], arm_right: ["arm_upper_right"],
+  leg_left: ["thigh_left"], leg_right: ["thigh_right"],
+  back_upper: ["back_upper_left", "back_upper_right"],
+  back_mid: ["back_mid_left", "back_mid_right"],
+  back_lower: ["back_lower_left", "back_lower_right"],
+};
+function migratePainMap(map) {
+  const out = {};
+  for (const [key, sev] of Object.entries(map || {})) {
+    const targets = LEGACY_PAIN_REGIONS[key] || [key];
+    for (const t of targets) if (!out[t]) out[t] = sev;
+  }
+  return out;
+}
+function painRegionLabel(key) {
+  return PAIN_REGION_LABELS[key] || key.replace(/_/g, " ");
+}
 function applyPainRegionVisual(region) {
   const sev = state.painMap[region] || "";
   $$(`.pain-region[data-region="${region}"]`).forEach((el) => {
@@ -665,7 +713,7 @@ async function loadTodayHealth() {
   updateEnergyLabel();
   $("#sleep-input").value = h.sleep_hours != null ? h.sleep_hours : "";
   $("#pain-scale").value = h.pain_scale != null ? h.pain_scale : "";
-  state.painMap = h.pain_map ? { ...h.pain_map } : {};
+  state.painMap = migratePainMap(h.pain_map);
   applyAllPainVisuals();
   $("#routine-notes").value = h.notes || "";
   state.selectedSymptoms = new Map();
@@ -812,6 +860,9 @@ function timelineDetail(entry) {
     const bits = [];
     if (symptoms) bits.push(`Symptoms: ${symptoms}`);
     if (entry.doc.pain_scale != null) bits.push(`Pain ${entry.doc.pain_scale}/10`);
+    const painRegions = Object.entries(entry.doc.pain_map || {})
+      .map(([k, sev]) => `${painRegionLabel(k)} (${sev})`);
+    if (painRegions.length) bits.push(`Pain: ${painRegions.join(", ")}`);
     return bits.join(" · ");
   }
   if (entry.type === "bathroom") return entry.doc.notes || "";

@@ -180,6 +180,42 @@ one time.
 | `users` | Login accounts (`AUTH_MODE=public` only) — username, a salted/hashed password, role. |
 | `passkeys` | Enrolled WebAuthn credentials (optional 2nd factor) — one document per passkey: which user it belongs to, its public key, sign count, nickname. See "Passkeys" below. |
 
+### Pain map regions
+
+`pain_map` is a flat `{region: "mild" | "moderate" | "severe"}` object; only
+painted regions appear. The region set follows how clinical pain-location
+diagrams are usually subdivided, so that *where* it hurt is useful to a
+clinician later, not just "head" or "stomach":
+
+- **Head** — `head_frontal` (forehead), `head_temporal_left` / `_right`
+  (temples), `head_vertex` (top, back view), `head_occipital` (back of head,
+  back view), `head_face` (eyes, sinuses, jaw). Headache classification
+  (ICHD-3, International Headache Society, 2018) treats unilateral vs
+  bilateral location and frontal / temporal / occipital site as diagnostic
+  features, so the head is never one blob.
+- **Abdomen** — the four quadrants `abdomen_upper_left` / `_right`,
+  `abdomen_lower_left` / `_right` plus the three midline regions of the
+  classic nine-region scheme: `epigastric`, `periumbilical`, `suprapubic`.
+  Quadrants alone blur the midline presentations clinicians ask about.
+- **Back** — `back_upper`, `back_mid`, `back_lower` (roughly
+  cervicothoracic / thoracic / lumbosacral), each split `_left` / `_right`
+  because back pain is often lateralised.
+- **Limbs** — joints are separate from the shaft (joint vs muscle pain is a
+  different signal): `shoulder`, `arm_upper`, `elbow`, `forearm`, `hand`,
+  `hip`, `thigh`, `knee`, `calf`, `foot`, each `_left` / `_right`. This is
+  the body-region split used by the Nordic Musculoskeletal Questionnaire
+  (Kuorinka et al., *Applied Ergonomics* 1987) and the CHOIR body map
+  (Scherrer et al., *Pain Reports* 2021), which also validated that
+  left/right must mean the *person's* side — so the front view is mirrored
+  (their right on your left) and the back view is not, with R/L labels on
+  the drawing.
+- `neck` and `chest` are single regions.
+
+The grouping of pain drawings into scored anatomical areas goes back to
+Margolis et al., *Pain* 1986 ("A rating system for use with patient pain
+drawings"); the set above is a coarser, tap-friendly version of the same
+idea. The app records location, it does not interpret it.
+
 ---
 
 ## Connecting an LLM (optional)
